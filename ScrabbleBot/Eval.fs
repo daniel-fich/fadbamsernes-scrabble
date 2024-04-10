@@ -1,12 +1,7 @@
 ﻿module internal Eval
 
     open StateMonad
-    open ScrabbleUtil
 
-    (* Code for testing *)
-
-    let hello = [('h', 4); ('e', 1); ('l', 1); ('l', 1); ('o', 1)] 
-    let state = mkState [("x", 5); ("y", 42)] hello ["_pos_"; "_result_"]
     let emptyState = mkState [] [] []
     
     let add a b =
@@ -70,12 +65,11 @@
     let (.<=.) a b = a .<. b .||. ~~(a .<>. b)
     let (.>=.) a b = ~~(a .<. b)                (* numeric greater than or equal to *)
     let (.>.) a b = ~~(a .=. b) .&&. (a .>=. b) (* numeric greater than *)    
-
+    let binop f sm1 sm2 =
+        sm1 >>= fun i1 ->
+        sm2 >>= fun i2 ->
+        ret (f i1 i2)
     let rec arithEval a : SM<int> =
-        let binop f sm1 sm2 =
-            sm1 >>= fun i1 ->
-            sm2 >>= fun i2 ->
-            ret (f i1 i2)
         let nonZeroSndArgBinop f sm1 sm2 =
             sm1 >>= fun i1 ->
             sm2 >>= fun i2 ->
@@ -102,10 +96,6 @@
         | IntToChar a -> arithEval a >>= fun i -> ret (char i)
 
     let rec boolEval b : SM<bool> =
-        let binop f sm1 sm2 =
-            sm1 >>= fun i1 ->
-            sm2 >>= fun i2 ->
-            ret (f i1 i2)
         match b with
         | TT -> ret true
         | FF -> ret false
@@ -139,7 +129,6 @@
             if b then stmntEval stmnt0 >>>= stmntEval stmnt
             else ret ()
 
-(* Part 3 (Optional) *)
 
     type StateBuilder() =
 
@@ -151,28 +140,86 @@
         
     let prog = new StateBuilder()
 
-    let arithEval2 a = failwith "Not implemented"
-    let charEval2 c = failwith "Not implemented"
-    let rec boolEval2 b = failwith "Not implemented"
+    let bindOp f a b =
+        prog.Bind(a, fun a' ->
+        prog.Bind(b, fun b' -> 
+        prog.Return(f a' b')))
 
-    let stmntEval2 stm = failwith "Not implemented"
+    let conditionalBindOp f a b (exp: 'b -> 'c -> Option<Error>) =
+        prog.Bind(a, fun a' -> 
+        prog.Bind(b, fun b' ->
+            let e = exp a' b'
+            if Option.isNone e then 
+                prog.Return(f a' b') 
+            else 
+                e |> Option.get |> fail))
 
-(* Part 4 (Optional) *) 
+    let divByZeroExp b =
+        match b with
+        | 0 -> Some(DivisionByZero)
+        | _ -> None
+    let rec arithEval2 a = 
+        match a with
+        | Add(a, b) -> 
+            bindOp (+) (arithEval2 a) (arithEval2 b)
+        | Mul(a, b) -> 
+            bindOp (*) (arithEval2 a) (arithEval2 b)
+        | Div(a, b) -> 
+            conditionalBindOp (/) (arithEval2 a) (arithEval2 b) (fun _ b -> b |> divByZeroExp)
+        | Sub(a, b) -> 
+            bindOp (-) (arithEval2 a) (arithEval2 b)
+        | Mod(a, b) -> 
+            conditionalBindOp (%) (arithEval2 a) (arithEval2 b) (fun _ b -> b |> divByZeroExp)
+        | WL -> wordLength 
+        | PV a -> prog.Bind(arithEval2 a, pointValue)
+        | N a -> ret a
+        | V a -> lookup a
+        | CharToInt c -> 
+                prog.Bind(charEval2 c, System.Char.GetNumericValue >> int >> ret)
 
-    (*
-    let stmntToSquareFun stm = failwith "Not implemented"
+    and charEval2 c = 
+        match c with
+        | C a -> ret a
+        | CV a -> prog.Bind(arithEval2 a, characterValue)
+        | ToUpper a -> prog.Bind(charEval2 a, System.Char.ToUpper >> ret) 
+        | ToLower a -> prog.Bind(charEval2 a, System.Char.ToLower >> ret)
+        | IntToChar a -> prog.Bind(arithEval2 a, characterValue)
 
-    let stmntToBoardFun stm m = failwith "Not implemented"
+    let rec boolEval2 b = 
+        match b with
+        | TT -> ret true
+        | FF -> ret false
+        | AEq(a, b) -> bindOp (=) (arithEval2 a) (arithEval2 b)
+        | ALt(a, b) -> bindOp (<) (arithEval2 a) (arithEval2 b)
+        | Not a -> prog.Bind(boolEval2 a, not >> ret)
+        | Conj(a, b) -> bindOp (&&) (boolEval2 a) (boolEval2 b)
+        | IsDigit e -> prog.Bind(charEval2 e, System.Char.IsDigit >> ret)
+        | IsLetter e -> prog.Bind(charEval2 e, System.Char.IsLetter >> ret)
+        | IsVowel e -> prog.Bind(charEval2 e, "aeiouAEIOU".IndexOf >> (>=) 0 >> ret)
 
-    type squareStmnt = Map<int, stmnt>
-    let stmntsToSquare stms = failwith "Not implemented"
 
-    type board = {
-        center        : coord
-        defaultSquare : square
-        squares       : boardFun
-    }
-
-    let mkBoard c defaultSq boardStmnt ids = failwith "Not implemented"
-    *)
-    
+    let rec stmntEval2 stm = 
+        match stm with
+        | Skip -> ret ()
+        | Declare st -> declare st
+        | Ass(st, aExp) ->
+            prog.Bind(
+                prog.Combine(declare st, arithEval2 aExp),
+                update st
+            )
+        | Seq(st1, st2) -> prog.Combine(stmntEval st1, stmntEval st2)
+        | ITE(guard, st1, st2) ->
+            prog.Bind(boolEval2 guard, (fun v -> 
+                if v then
+                    stmntEval st1
+                else
+                    stmntEval st2
+            ))
+        | While(guard, st) ->
+            prog.Bind(boolEval2 guard, (fun v -> 
+                if v then
+                    prog.Combine(stmntEval2 st, stmntEval2 (While(guard, st)))
+                else
+                    stmntEval st
+            ))
+              

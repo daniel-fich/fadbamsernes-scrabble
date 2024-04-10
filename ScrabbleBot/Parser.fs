@@ -11,7 +11,6 @@
 
     *)
 
-    //open JParsec.TextParser             // Example parser combinator library. Use for CodeJudge.
     open FParsecLight.TextParser     // Industrial parser-combinator library. Use for Scrabble Project.
     
     type word   = (char * int) list
@@ -73,87 +72,75 @@
     let unop = (>*>.)
     let binop pOp p1 p2 = p1 .>*> pOp .>*>. p2
 
-    (*
-    Term ::= Prod + Term
-		   | Prod - Term
-		   | Prod
-
-	Prod ::= Atom * Prod
-		   | Atom / Prod
-		   | Atom % Prod
-	       | Atom
-	       
-	Atom ::= -Atom
-		   | pointValue Atom
-		   | charToInt Char
-		   | ( Term )
-		   | n
-		   | v 
-    *)
-    
     let TermParse, tref = createParserForwardedToRef<aExp>()
     let ProdParse, pref = createParserForwardedToRef<aExp>()
     let AtomParse, aref = createParserForwardedToRef<aExp>()
-    let CharParse, cref = createParserForwardedToRef<cExp>()
+    let CtermParse, tcref = createParserForwardedToRef<cExp>()
+    let CtomParse, cref = createParserForwardedToRef<cExp>()
+
     let AddParse = binop (pchar '+') ProdParse TermParse |>> Add <?> "Add"
     let SubParse = binop (pchar '-') ProdParse TermParse |>> Sub <?> "Sub"
     do tref := choice [AddParse; SubParse; ProdParse]
 
-    let MulParse = binop (pchar '*') AtomParse ProdParse |>> Mul <?> "Mul"
-    let DivParse = binop (pchar '/') AtomParse ProdParse |>> Div <?> "Div"
-    let ModParse = binop (pchar '%') AtomParse ProdParse |>> Mod <?> "Mod"
+
+    let sndLvl op f fail = binop (pchar op) AtomParse ProdParse |>> f <?> fail
+
+    let MulParse = sndLvl '*' Mul "Mul" 
+    let DivParse = sndLvl '/' Div "Div"
+    let ModParse = sndLvl '%' Mod "Mod"
     do pref := choice [MulParse; DivParse; ModParse; AtomParse]
-    
-    let ParParse = parenthesise TermParse
-    let CParParse = parenthesise CharParse
 
+
+    let NegParse = unop (pchar '-') AtomParse |>> negateExpression <?> "Mul"
     let NParse   = pint32 |>> N <?> "Int"
-    let VParse = pid |>> V <?> "V"
+    let VParse = pid |>> V <?> "String"
+    let ParParse = parenthesise TermParse
     let PVParse = pPointValue >*>. ParParse |>> PV <?> "PV"
-    let NegParse = pchar '-' >*>. AtomParse |>> negateExpression <?> "PV"
-    let CharToIntParse = pCharToInt >*>. CParParse |>> CharToInt <?> "CharToInt"
-    do aref := choice [NegParse; PVParse; CharToIntParse; ParParse; NParse; VParse]
+    let CharToIntParse = pCharToInt >*>. CtermParse |>> CharToInt <?> "CharToInt"
+    do aref := choice [CharToIntParse; NegParse; NParse; PVParse; VParse; ParParse]
 
-    let quotate p = pchar '\'' >>. p .>> pchar '\''
-    let CParse = satisfy (fun _ -> true) |> quotate |>> C <?> "Char"
-    let ToUpperParse = pToUpper >*>. CParParse |>> ToUpper <?> "ToUpper"
-    let ToLowerParse = pToLower >*>. CParParse |>> ToLower <?> "ToLower"
-    let IntToCharParse = pIntToChar >*>. ParParse |>> IntToChar <?> "IntToChar"
-    let CVParse = pCharValue >*>. ParParse |>> CV <?> "CV"
-    do cref := choice [CParse; CParParse; ToUpperParse; ToLowerParse; IntToCharParse; CVParse]
-    
-    (*
-    pTerm     ::= pProd pTermRest
-    
-    pTermRest ::= + pProd pTermRest
-    
-    
-    let rec pTerm = pProd .>*>. pTermRest |>> fun (a1, (f, a2)) -> f (a1, a2)
-    and pTermRest =
-        let pAdd = (pchar '+') >*>. pProd |>> fun a -> (Add, a)
-        let emptyAExp = N 0
-        let empty = pstring "" |>> fun _ -> (fst, emptyAExp)
-        pAdd <|> empty
-    and pProd = pAtom
-    //and pProdRest = pint32 |>> N <?> "Int"
-    and pAtom =
-        let nParse = pint32 |>> N <?> "Int"
-        let parParse = parenthesise pTerm
-        choice [parParse; nParse]
-    *)
-    
     let AexpParse = TermParse 
 
-    let CexpParse = CharParse
+    let CVParse = pCharValue >*>. TermParse |>> CV
+    let ICParse = pIntToChar >*>. TermParse |>> IntToChar
+    let C2UpParse = pToUpper >*>. CtomParse |>> ToUpper
+    let C2LoParse = pToLower >*>. CtomParse |>> ToLower
+    do tcref := choice [CVParse; ICParse; C2LoParse; C2UpParse; CtomParse]
 
-    let BexpParse = pstring "not implemented"
+    let CParParse = parenthesise CtomParse
+    let CParse =  between (pchar ''') (pchar ''') anyChar  |>> C
+    do cref := choice [CParse; CParParse; CtermParse]
 
+
+    let curry f = fun (a, b) -> f a b
+    let CexpParse = CtermParse
+
+    let BTermParse, bref = createParserForwardedToRef<bExp>()
+    let BtomParse, btref = createParserForwardedToRef<bExp>()
+    
+    let AndParse = binop (pstring "/\\") BtomParse BtomParse        |>> curry (.&&.) 
+    let OrParse = binop (pstring "\/") BtomParse BtomParse          |>> curry (.||.)
+    let NotParse = unop (pchar '~') BtomParse                       |>> (~~)
+    let EqParse = binop (pchar '=') TermParse TermParse             |>> curry (.=.)
+    let NeqParse = binop (pstring "<>") TermParse TermParse         |>> curry (.<>.)
+    let LTParse = binop (pchar '<') TermParse TermParse             |>> curry (.<.)
+    let LTEqParse = binop (pstring "<=") TermParse TermParse        |>> curry (.<=.)
+    let GTParse = binop (pchar '>') TermParse TermParse             |>> curry (.>.)
+    let GTEqParse = binop (pstring ">=") TermParse TermParse        |>> curry (.>=.)
+    let IsDigParse = pIsDigit >*>. CtermParse                       |>> IsDigit
+    let IsLetParse = pIsLetter >*>. CtermParse                      |>> IsLetter
+    let IsVovParse = pIsVowel >*>. CtermParse                       |>> IsVowel
+
+    let BParParse = parenthesise BTermParse
+    let TTParse = pTrue |>> fun _ -> TT
+    let FFParse = pFalse |>> fun _ -> FF
+
+    let BexpParse = BTermParse
+    do bref := choice [AndParse; OrParse; NotParse; EqParse; NeqParse; LTParse; LTEqParse; GTParse; GTEqParse; IsDigParse; IsLetParse; IsVovParse; BtomParse]
+    do btref := choice [FFParse; TTParse; BParParse]
+    
     let stmntParse = pstring "not implemented"
-
-
     let parseSquareProg _ = failwith "not implemented"
-
     let parseBoardProg _ = failwith "not implemented"
 
     let mkBoard (bp : boardProg) : board = failwith "not implemented"
-

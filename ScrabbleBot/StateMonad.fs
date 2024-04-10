@@ -27,8 +27,6 @@
         | Success (result, _) -> Success result
         | Failure error -> Failure error
     
-    //let evalSMState (s : State) (S a : SM<'a>) = a s
-
     let bind (f : 'a -> SM<'b>) (S a : SM<'a>) : SM<'b> =
         S (fun s ->
               match a s with
@@ -52,17 +50,17 @@
 
     let wordLength : SM<int> = S (fun s -> Success (List.length s.word, s))
 
-    let characterValue (pos : int) : SM<char> =
+    let getCharacter (pos: int) f : SM<'b> =
         S (fun s ->
-            if 0 <= pos && pos < List.length s.word
-            then Success (s.word[pos] |> fst, s)
-            else Failure (IndexOutOfBounds pos))
+            if pos < s.word.Length && pos >= 0
+            then Success (f s.word[pos], s)
+            else Failure (IndexOutOfBounds pos)) // Should this be the error returned
+    
+    let characterValue (pos : int) : SM<char> =
+        getCharacter pos fst
 
     let pointValue (pos : int) : SM<int> =
-        S (fun s ->
-            if 0 <= pos && pos < List.length s.word
-            then Success (s.word[pos] |> snd, s)
-            else Failure (IndexOutOfBounds pos))
+        getCharacter pos snd
 
     let lookup (x : string) : SM<int> = 
         let rec aux =
@@ -88,7 +86,7 @@
             
             else Success ((), {s with vars = (s.vars |> List.head |> Map.add var 0) :: List.tail s.vars}))
        
-    let update (var : string) (value : int) : SM<unit> = // Not finished
+    let update (var : string) (value : int) : SM<unit> = 
         let rec updateVars = // Not tail recursive
             function
             | [] -> []
