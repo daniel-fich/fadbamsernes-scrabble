@@ -1,11 +1,24 @@
-﻿// Insert your updated Eval.fs file here from Assignment 7. All modules must be internal.
-
-module internal Eval
+﻿module internal Eval
 
     open StateMonad
+    open ScrabbleUtil
 
-    let add a b = failwith "Not implemented"      
-    let div a b = failwith "Not implemented"      
+    (* Code for testing *)
+
+    let hello = [('h', 4); ('e', 1); ('l', 1); ('l', 1); ('o', 1)] 
+    let state = mkState [("x", 5); ("y", 42)] hello ["_pos_"; "_result_"]
+    let emptyState = mkState [] [] []
+    
+    let add a b =
+        a >>= fun x ->
+        b >>= fun y ->
+        ret (x + y)
+    let div a b =
+        a >>= fun x ->
+        b >>= fun y ->
+            match y with
+            | 0 -> fail DivisionByZero
+            | y -> ret (x / y)
 
     type aExp =
         | N of int
@@ -37,7 +50,8 @@ module internal Eval
        | Conj of bExp * bExp  (* boolean conjunction *)
 
        | IsVowel of cExp      (* check for vowel *)
-       | IsConsonant of cExp  (* check for constant *)
+       | IsLetter of cExp     (* check for letter *)
+       | IsDigit of cExp      (* check for digit *)
 
     let (.+.) a b = Add (a, b)
     let (.-.) a b = Sub (a, b)
@@ -57,22 +71,73 @@ module internal Eval
     let (.>=.) a b = ~~(a .<. b)                (* numeric greater than or equal to *)
     let (.>.) a b = ~~(a .=. b) .&&. (a .>=. b) (* numeric greater than *)    
 
-    let arithEval a : SM<int> = failwith "Not implemented"      
+    let rec arithEval a : SM<int> =
+        let binop f sm1 sm2 =
+            sm1 >>= fun i1 ->
+            sm2 >>= fun i2 ->
+            ret (f i1 i2)
+        let nonZeroSndArgBinop f sm1 sm2 =
+            sm1 >>= fun i1 ->
+            sm2 >>= fun i2 ->
+            if i2 <> 0
+            then ret (f i1 i2)
+            else fail DivisionByZero
+        match a with
+        | N i -> ret i
+        | V v -> lookup v
+        | WL -> wordLength
+        | PV a -> arithEval a >>= pointValue
+        | Add (x, y) -> binop (+) (arithEval x) (arithEval y)
+        | Sub (x, y) -> binop (-) (arithEval x) (arithEval y)
+        | Mul (x, y) -> binop (*) (arithEval x) (arithEval y)
+        | Div (x, y) -> nonZeroSndArgBinop (/) (arithEval x) (arithEval y)
+        | Mod (x, y) -> nonZeroSndArgBinop (%) (arithEval x) (arithEval y)
+        | CharToInt c -> charEval c >>= fun c -> ret (int c)
+    and charEval c : SM<char> =
+        match c with
+        | C c -> ret c
+        | CV a -> arithEval a >>= characterValue
+        | ToUpper c -> charEval c >>= fun c -> ret (System.Char.ToUpper c)
+        | ToLower c -> charEval c >>= fun c -> ret (System.Char.ToLower c)
+        | IntToChar a -> arithEval a >>= fun i -> ret (char i)
 
-    let charEval c : SM<char> = failwith "Not implemented"      
+    let rec boolEval b : SM<bool> =
+        let binop f sm1 sm2 =
+            sm1 >>= fun i1 ->
+            sm2 >>= fun i2 ->
+            ret (f i1 i2)
+        match b with
+        | TT -> ret true
+        | FF -> ret false
+        | AEq (x, y) -> binop (=) (arithEval x) (arithEval y)
+        | ALt (x, y) -> binop (<) (arithEval x) (arithEval y)
+        | Not b -> boolEval b >>= fun b -> ret (not b)
+        | Conj (p, q) -> binop (&&) (boolEval p) (boolEval q)
+        | IsVowel c -> charEval c >>= fun c -> ret ("aeiouAEIOU".Contains(c))
+        | IsLetter c -> charEval c >>= fun c -> ret (System.Char.IsLetter c)
+        | IsDigit c -> charEval c >>= fun c -> ret (System.Char.IsDigit c)
 
-    let boolEval b : SM<bool> = failwith "Not implemented"
 
+    type stmnt =                  (* statements *)
+    | Declare of string           (* variable declaration *)
+    | Ass of string * aExp        (* variable assignment *)
+    | Skip                        (* nop *)
+    | Seq of stmnt * stmnt        (* sequential composition *)
+    | ITE of bExp * stmnt * stmnt (* if-then-else statement *)
+    | While of bExp * stmnt       (* while statement *)
 
-    type stm =                (* statements *)
-    | Declare of string       (* variable declaration *)
-    | Ass of string * aExp    (* variable assignment *)
-    | Skip                    (* nop *)
-    | Seq of stm * stm        (* sequential composition *)
-    | ITE of bExp * stm * stm (* if-then-else statement *)
-    | While of bExp * stm     (* while statement *)
-
-    let rec stmntEval stmnt : SM<unit> = failwith "Not implemented"
+    let rec stmntEval stmnt : SM<unit> =
+        match stmnt with
+        | Declare str -> declare str
+        | Ass (str, aExp) -> arithEval aExp >>= update str
+        | Skip -> ret ()
+        | Seq (stmnt1, stmnt2) -> stmntEval stmnt1 >>>= stmntEval stmnt2
+        | ITE (bExp, stmnt1, stmnt2) ->
+            boolEval bExp >>= fun b -> if b then stmntEval stmnt1 else stmntEval stmnt2
+        | While (bExp, stmnt0) ->
+            boolEval bExp >>= fun b ->
+            if b then stmntEval stmnt0 >>>= stmntEval stmnt
+            else ret ()
 
 (* Part 3 (Optional) *)
 
@@ -92,24 +157,22 @@ module internal Eval
 
     let stmntEval2 stm = failwith "Not implemented"
 
-(* Part 4 *) 
+(* Part 4 (Optional) *) 
 
-    type word = (char * int) list
-    type squareFun = word -> int -> int -> Result<int, Error>
-
+    (*
     let stmntToSquareFun stm = failwith "Not implemented"
-
-
-    type coord = int * int
-
-    type boardFun = coord -> Result<squareFun option, Error> 
 
     let stmntToBoardFun stm m = failwith "Not implemented"
 
+    type squareStmnt = Map<int, stmnt>
+    let stmntsToSquare stms = failwith "Not implemented"
+
     type board = {
         center        : coord
-        defaultSquare : squareFun
+        defaultSquare : square
         squares       : boardFun
     }
 
     let mkBoard c defaultSq boardStmnt ids = failwith "Not implemented"
+    *)
+    

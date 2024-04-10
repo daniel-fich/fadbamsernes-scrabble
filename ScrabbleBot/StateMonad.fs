@@ -1,7 +1,4 @@
-﻿// Insert your StateMonad.fs from Assignment 6 here. All modules must be internal.
-
-
-module internal StateMonad
+﻿module internal StateMonad
 
     type Error = 
         | VarExists of string
@@ -29,6 +26,8 @@ module internal StateMonad
         match a s with
         | Success (result, _) -> Success result
         | Failure error -> Failure error
+    
+    //let evalSMState (s : State) (S a : SM<'a>) = a s
 
     let bind (f : 'a -> SM<'b>) (S a : SM<'a>) : SM<'b> =
         S (fun s ->
@@ -48,13 +47,22 @@ module internal StateMonad
     let push : SM<unit> = 
         S (fun s -> Success ((), {s with vars = Map.empty :: s.vars}))
 
-    let pop : SM<unit> = failwith "Not implemented"      
+    let pop : SM<unit> =
+        S (fun s -> Success ((), {s with vars = List.tail s.vars}))
 
-    let wordLength : SM<int> = failwith "Not implemented"      
+    let wordLength : SM<int> = S (fun s -> Success (List.length s.word, s))
 
-    let characterValue (pos : int) : SM<char> = failwith "Not implemented"      
+    let characterValue (pos : int) : SM<char> =
+        S (fun s ->
+            if 0 <= pos && pos < List.length s.word
+            then Success (s.word[pos] |> fst, s)
+            else Failure (IndexOutOfBounds pos))
 
-    let pointValue (pos : int) : SM<int> = failwith "Not implemented"      
+    let pointValue (pos : int) : SM<int> =
+        S (fun s ->
+            if 0 <= pos && pos < List.length s.word
+            then Success (s.word[pos] |> snd, s)
+            else Failure (IndexOutOfBounds pos))
 
     let lookup (x : string) : SM<int> = 
         let rec aux =
@@ -70,5 +78,26 @@ module internal StateMonad
               | Some v -> Success (v, s)
               | None   -> Failure (VarNotFound x))
 
-    let declare (var : string) : SM<unit> = failwith "Not implemented"   
-    let update (var : string) (value : int) : SM<unit> = failwith "Not implemented"      
+    let declare (var : string) : SM<unit> =
+        S (fun s ->
+            if s.vars |> List.head |> Map.containsKey var
+            then Failure (VarExists var)
+            
+            else if Set.contains var s.reserved
+            then Failure (ReservedName var)
+            
+            else Success ((), {s with vars = (s.vars |> List.head |> Map.add var 0) :: List.tail s.vars}))
+       
+    let update (var : string) (value : int) : SM<unit> = // Not finished
+        let rec updateVars = // Not tail recursive
+            function
+            | [] -> []
+            | m :: ms ->
+                if Map.containsKey var m
+                then Map.add var value m :: ms
+                else m :: updateVars ms
+        
+        S (fun s ->
+            if List.fold (fun exists map -> exists || Map.containsKey var map) false s.vars // Checks if var exists
+            then Success ((), {s with vars = updateVars s.vars})
+            else Failure (VarNotFound var))
