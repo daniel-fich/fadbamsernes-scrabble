@@ -41,6 +41,9 @@
     let ofList (list : 'a list) : MultiSet<'a> =
         List.fold (fun ms x -> addSingle x ms) empty list
      
+    let ofListAmount (list : ('a*uint32) list) : MultiSet<'a> =
+            List.fold (fun ms pair -> add (fst pair) (snd pair) ms) empty list
+            
     let toList (ms : MultiSet<'a>) : 'a list =
         let createList count x = List.init (int count) (fun _ -> x)
         let folder = fun list x count -> (createList count x) @ list

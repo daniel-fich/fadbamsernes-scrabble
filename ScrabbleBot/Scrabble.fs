@@ -3,13 +3,12 @@
 open Parser
 open ScrabbleUtil
 open ScrabbleUtil.ServerCommunication
-
+open Gaddag
 open System.IO
 
 open ScrabbleUtil.DebugPrint
 
 // The RegEx module is only used to parse human input. It is not used for the final product.
-
 module RegEx =
     open System.Text.RegularExpressions
 
@@ -29,7 +28,7 @@ module RegEx =
                     ((x |> int, y |> int), (id |> uint32, (c |> char, p |> int)))
                 | _ -> failwith "Failed (should never happen)") |>
         Seq.toList
-
+// 0 0 20t1 0 1 9i1 0 2 5e1
  module Print =
 
     let printHand pieces hand =
@@ -65,8 +64,16 @@ module State =
 
 module Scrabble =
     open System.Threading
-
-    let playGame cstream pieces (st : State.state) =
+    let trd (a, b, c) = c
+    let fst (a, b, c) = a
+    let snd (a, b, c) = b
+    let toBoardState ms = ms |> List.map (fun (coord, (tid, (c, v))) ->
+                    coord, (c, v)
+                )
+    let toBoardStateWId ms = ms |> List.map (fun (coord, (tid, (c, v))) ->
+                        tid, coord, (c, v)
+                    )
+    let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
 
         let rec aux (st : State.state) =
             Print.printHand pieces (State.hand st)
@@ -85,21 +92,19 @@ module Scrabble =
             match msg with
             | RCM (CMPlaySuccess(ms, points, newPieces)) ->
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
-                let st' = st // This state needs to be updated
-                aux st'
+                let res = toBoardStateWId ms
+                let updated = (st.board, res)
+                              ||> List.fold (fun s row -> Map.add (snd row) (trd row) s)
+                let newHand = res
+                               |> List.map fst 
+                               |> MultiSet.ofList
+                               |> MultiSet.subtract st.hand
+                               |> MultiSet.union (MultiSet.ofListAmount newPieces)
+                aux {st with board = updated; hand = newHand }
             | RCM (CMPlayed (pid, ms, points)) ->
                 (* Successful play by other player. Update your state *)
-                let res = ms |> List.map (fun (coord, (tid, (c, v))) ->
-                    coord, (c, v)
-                )
-                let rec aux' i s =
-                    match i with
-                    | [] -> s
-                    | x :: xs ->
-                        let a, b = x
-                        aux' xs (Map.add a b s)
-                let st' = {st with board = aux' res (st.board) }
-                aux st'
+                let updated = (st.board, toBoardStateWId ms) ||> List.fold (fun s row -> Map.add (snd row) (trd row) s)
+                aux {st with board = updated }
             | RCM (CMPlayFailed (pid, ms)) ->
                 (* Failed play. Update your state *)
                 let st' = st // This state needs to be updated
@@ -131,7 +136,7 @@ module Scrabble =
 
         let dict = dictf true // Uncomment if using a gaddag for your dictionary
         // let board = Parser.mkBoard boardP
-                  
+        let res = Dictionary.step 'T' dict
         let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty hand
 
         fun () -> playGame cstream tiles (State.mkState Map.empty dict playerNumber handSet)
