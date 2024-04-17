@@ -86,6 +86,8 @@ module Scrabble =
             //      make some formatting function and set input
             // else
             //      get the first character from the board and try to make a word
+            //      check that there are no characters at current pos x+-1
+            //      if there is a character move to that one and try to make a word
             let input =  System.Console.ReadLine()
             let move = RegEx.parseMove input
 
