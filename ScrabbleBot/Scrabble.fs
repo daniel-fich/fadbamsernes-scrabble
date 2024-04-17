@@ -80,6 +80,12 @@ module Scrabble =
 
             // remove the force print when you move on from manual input (or when you have learnt the format)
             forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
+            // Pseudo algorithm for choosing a word
+            // if Map.isEmpty st.board then
+            //      greedily get the first completed word
+            //      make some formatting function and set input
+            // else
+            //      get the first character from the board and try to make a word
             let input =  System.Console.ReadLine()
             let move = RegEx.parseMove input
 
@@ -136,7 +142,7 @@ module Scrabble =
 
         let dict = dictf true // Uncomment if using a gaddag for your dictionary
         // let board = Parser.mkBoard boardP
-        let res = Dictionary.step 'T' dict
+        // let res = Dictionary.step 'T' dict
         let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty hand
 
         fun () -> playGame cstream tiles (State.mkState Map.empty dict playerNumber handSet)
