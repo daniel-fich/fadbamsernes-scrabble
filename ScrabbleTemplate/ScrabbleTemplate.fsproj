@@ -8,8 +8,6 @@
   <ItemGroup>
 
     <Content Include="Dictionaries\English.txt" />
-    <Compile Include="Gaddag.fsi" />
-    <Compile Include="Gaddag.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

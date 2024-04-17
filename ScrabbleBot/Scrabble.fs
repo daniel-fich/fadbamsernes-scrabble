@@ -1,5 +1,6 @@
 ﻿namespace YourClientName
 
+open Parser
 open ScrabbleUtil
 open ScrabbleUtil.ServerCommunication
 
@@ -42,13 +43,20 @@ module State =
     // information, such as number of players, player turn, etc.
 
     type state = {
-        board         : Parser.board
+        // board         : Parser.board
+        board         : Map<int*int, char*int>
         dict          : ScrabbleUtil.Dictionary.Dict
         playerNumber  : uint32
         hand          : MultiSet.MultiSet<uint32>
     }
 
-    let mkState b d pn h = {board = b; dict = d;  playerNumber = pn; hand = h }
+    let mkState b d pn h = {
+        // board = b;
+        board = b
+        dict = d
+        playerNumber = pn
+        hand = h
+    }
 
     let board st         = st.board
     let dict st          = st.dict
@@ -81,7 +89,16 @@ module Scrabble =
                 aux st'
             | RCM (CMPlayed (pid, ms, points)) ->
                 (* Successful play by other player. Update your state *)
-                let st' = st // This state needs to be updated
+                let res = ms |> List.map (fun (coord, (tid, (c, v))) ->
+                    coord, (c, v)
+                )
+                let rec aux' i s =
+                    match i with
+                    | [] -> s
+                    | x :: xs ->
+                        let a, b = x
+                        aux' xs (Map.add a b s)
+                let st' = {st with board = aux' res (st.board) }
                 aux st'
             | RCM (CMPlayFailed (pid, ms)) ->
                 (* Failed play. Update your state *)
@@ -105,18 +122,17 @@ module Scrabble =
             (timeout : uint32 option) 
             (cstream : Stream) =
         debugPrint 
-            (sprintf "Starting game!
-                      number of players = %d
-                      player id = %d
-                      player turn = %d
-                      hand =  %A
-                      timeout = %A\n\n" numPlayers playerNumber playerTurn hand timeout)
+            $"Starting game!
+                      number of players = %d{numPlayers}
+                      player id = %d{playerNumber}
+                      player turn = %d{playerTurn}
+                      hand =  %A{hand}
+                      timeout = %A{timeout}\n\n"
 
-        //let dict = dictf true // Uncomment if using a gaddag for your dictionary
-        let dict = dictf false // Uncomment if using a trie for your dictionary
-        let board = Parser.mkBoard boardP
+        let dict = dictf true // Uncomment if using a gaddag for your dictionary
+        // let board = Parser.mkBoard boardP
                   
         let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty hand
 
-        fun () -> playGame cstream tiles (State.mkState board dict playerNumber handSet)
+        fun () -> playGame cstream tiles (State.mkState Map.empty dict playerNumber handSet)
         

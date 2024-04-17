@@ -5,6 +5,8 @@
     </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Gaddag.fsi" />
+    <Compile Include="Gaddag.fs" />
     <Compile Include="MultiSet.fsi" />
     <Compile Include="MultiSet.fs" />
     <Compile Include="FParsecLight.fsi" />

@@ -1,5 +1,7 @@
 ﻿// Learn more about F# at http://fsharp.org
 
+open YourClientName
+
 let time f =
     let start = System.DateTime.Now
     let res = f ()
@@ -24,8 +26,8 @@ let main argv =
     System.Console.ForegroundColor <- System.ConsoleColor.Black
     System.Console.Clear()
 
-    let board        = ScrabbleUtil.StandardBoard.standardBoard ()
-//    let board      = ScrabbleUtil.InfiniteBoard.infiniteBoard ()
+    // let board        = ScrabbleUtil.StandardBoard.standardBoard ()
+    let board      = ScrabbleUtil.InfiniteBoard.infiniteBoard ()
 
 //    let board      = ScrabbleUtil.RandomBoard.randomBoard ()
 //    let board      = ScrabbleUtil.RandomBoard.randomBoardSeed (Some 42)
@@ -51,13 +53,16 @@ let main argv =
     // Uncomment this line to call your client
     // let players    = [("Your name here", YourClientName.Scrabble.startGame)]
     let (dictionary, time) =
-        time (fun () -> ScrabbleUtil.Dictionary.mkDict words dictAPI)
+        time (fun () -> ScrabbleUtil.Dictionary.mkDict words dictAPI) 
 
-    let players = spawnMultiples "OxyphenButazone" dictionary Oxyphenbutazone.Scrabble.startGame 2
+    // let players = spawnMultiples "OxyphenButazone" dictionary Oxyphenbutazone.Scrabble.startGame 2
+    let players = spawnMultiples "OxyphenButashit" dictionary Scrabble.startGame 2
 
 
     do ScrabbleServer.Comm.startGame 
           board dictionary handSize timeout tiles seed port players
+    
+    // Scrabble.startGame board dictionary handSize timeout tiles seed port players 
     
     ScrabbleUtil.DebugPrint.forcePrint ("Server has terminated. Press Enter to exit program.\n")
     System.Console.ReadLine () |> ignore
