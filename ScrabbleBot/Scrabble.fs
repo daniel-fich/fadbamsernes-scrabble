@@ -1,5 +1,6 @@
 ﻿namespace YourClientName
 
+open System.Reflection
 open Parser
 open ScrabbleUtil
 open ScrabbleUtil.ServerCommunication
@@ -62,17 +63,52 @@ module State =
     let playerNumber st  = st.playerNumber
     let hand st          = st.hand
 
+module GenerateMove =
+    
+    let rec gen pos word rack arc (state: State.state) =
+        if Map.containsKey pos state.board then
+           0 
+        elif List.isEmpty rack then
+            List.filter (fun c -> allowed c arc) rack
+            |> List.iter (fun c -> goOn pos c word (List.filter (fun c' -> c' <> c)) (step c arc) arc)
+            0
+        else
+            0
+    and goOn pos l word rack newArc oldArc =
+        // if po
+        ()
 module Scrabble =
     open System.Threading
-    let trd (a, b, c) = c
-    let fst (a, b, c) = a
-    let snd (a, b, c) = b
+    let fst (a, _, _) = a
+    let snd (_, b, _) = b
+    let trd (_, _, c) = c
     let toBoardState ms = ms |> List.map (fun (coord, (tid, (c, v))) ->
                     coord, (c, v)
                 )
     let toBoardStateWId ms = ms |> List.map (fun (coord, (tid, (c, v))) ->
                         tid, coord, (c, v)
                     )
+    let getWordFromHand (hand: char list) (st: State.state): string =
+        rotateFold2 hand
+        ""
+    // % a k j l i t o
+    // a 
+    let rec findSuitable (hand: char list) (acc: char list) (dict : Dictionary.Dict) =
+        match hand with
+        | [] -> None
+        | x :: xs ->
+            let res = Dictionary.step x dict
+            if Option.isSome res then
+                let isTerminal, dict' = Option.get res
+                if isTerminal then
+                    Some(acc)
+                else
+                    findSuitable xs (x::acc) dict'
+            else
+                None
+            
+            
+        
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
 
         let rec aux (st : State.state) =
