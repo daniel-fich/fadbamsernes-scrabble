@@ -19,6 +19,19 @@
         | R (m) when Map.containsKey a m -> Map.find a m
         | R (_) -> 0u
 
+    let getKeys (R(s)) =
+        let rec aux L acc c =
+            if c > 0u then
+                aux L (L::acc) (c-1u)
+            else
+                acc
+               
+        ([], Map.toList s) ||> List.fold (fun acc item ->
+            let a, b = item
+            let res = aux a [] b
+            acc @ res
+        )
+        
     let add (a : 'a) (count : uint32) (R m) : MultiSet<'a> =
         let newCount = m |> Map.tryFind a |> Option.defaultValue 0u |> (+) count
         R (Map.add a newCount m)
@@ -41,6 +54,9 @@
     let ofList (list : 'a list) : MultiSet<'a> =
         List.fold (fun ms x -> addSingle x ms) empty list
      
+    let ofListAmount (list : ('a*uint32) list) : MultiSet<'a> =
+            List.fold (fun ms pair -> add (fst pair) (snd pair) ms) empty list
+            
     let toList (ms : MultiSet<'a>) : 'a list =
         let createList count x = List.init (int count) (fun _ -> x)
         let folder = fun list x count -> (createList count x) @ list

@@ -3,19 +3,16 @@ module Gaddag
     type Dict = {
             letters : Map<char, Dict>
             isTerminal : bool
-        }
+    }
         
     let empty =
         fun () -> {
             letters = Map.empty
             isTerminal = false
         }
-    let ifNoneThenSome a =
-        match a with
-        | None -> empty()
-        | Some(b) -> b
-
-    let rec rotateFold (str: char list) (acc: char list list) =
+    let ifNoneThenSome a = Option.defaultValue (empty()) a
+        
+    let rec rotateFold (str: 'a list) (acc: 'a list list) =
         // let l = List.length str
         // match str with
         // | _ when str[l-1]='#' -> acc
@@ -37,6 +34,13 @@ module Gaddag
                 arr[i] <- tmpj
             acc1 <- Array.toList arr :: acc1
         acc1
+        
+    let rec rotateFold2 (str: 'a list) =
+        let mutable acc1 = []
+        for i in 0..List.length str do
+            let res = (str, []) ||> List.fold (fun v a -> v[i%List.length str] :: a)
+            acc1 <- res::acc1
+        acc1 
         
     let insert (str: string) (state: Dict): Dict =
         let rec inner (str1: char list) cont (st: Dict) : Dict =
@@ -84,10 +88,14 @@ module Gaddag
         inner (List.ofSeq str) state
         
     let step c state =
-        match state.letters |> Map.tryFind c with
+        match state.letters |> Map.tryFind (Char.ToLower c) with
         | None -> None
         | Some(e) -> Some(e.isTerminal, e)
 
+    let allowed c state =
+        match state.letters |> Map.tryFind c with
+        | None -> false
+        | Some(_) -> true
 
     let reverse state = step '#' state
         
