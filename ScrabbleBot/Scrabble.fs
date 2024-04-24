@@ -79,9 +79,9 @@ module GenerateMove =
         ()
 module Scrabble =
     open System.Threading
-    let fst (a, _, _) = a
-    let snd (_, b, _) = b
-    let trd (_, _, c) = c
+    let first (a, _, _) = a
+    let second (_, b, _) = b
+    let third (_, _, c) = c
     let toBoardState ms = ms |> List.map (fun (coord, (tid, (c, v))) ->
                     coord, (c, v)
                 )
@@ -106,13 +106,26 @@ module Scrabble =
                     findSuitable xs (x::acc) dict'
             else
                 None
+    
+    let findAnchors board =
+        let rec aux (x, y) (anchors, visited) =
+            if Set.contains (x, y) visited
+            then (anchors, visited)
             
+            else if Map.containsKey (x, y) board
+            then (anchors, Set.add (x, y) visited) |>
+                 aux (x+1,y) |> aux (x-1,y) |> aux (x,y+1) |> aux (x,y-1)
             
-        
+            else (Set.add (x, y) anchors, Set.add (x, y) visited)
+        aux (0, 0) (Set.empty, Set.empty) |> fst
+    
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
 
         let rec aux (st : State.state) =
             Print.printHand pieces (State.hand st)
+            
+            let anchors = findAnchors st.board
+            forcePrint $"Anchors: {anchors}\n"
 
             // remove the force print when you move on from manual input (or when you have learnt the format)
             forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
@@ -138,16 +151,16 @@ module Scrabble =
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
                 let res = toBoardStateWId ms
                 let updated = (st.board, res)
-                              ||> List.fold (fun s row -> Map.add (snd row) (trd row) s)
+                              ||> List.fold (fun s row -> Map.add (second row) (third row) s)
                 let newHand = res
-                               |> List.map fst 
+                               |> List.map first 
                                |> MultiSet.ofList
                                |> MultiSet.subtract st.hand
                                |> MultiSet.union (MultiSet.ofListAmount newPieces)
                 aux {st with board = updated; hand = newHand }
             | RCM (CMPlayed (pid, ms, points)) ->
                 (* Successful play by other player. Update your state *)
-                let updated = (st.board, toBoardStateWId ms) ||> List.fold (fun s row -> Map.add (snd row) (trd row) s)
+                let updated = (st.board, toBoardStateWId ms) ||> List.fold (fun s row -> Map.add (second row) (third row) s)
                 aux {st with board = updated }
             | RCM (CMPlayFailed (pid, ms)) ->
                 (* Failed play. Update your state *)
