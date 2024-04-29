@@ -39,32 +39,6 @@ module RegEx =
         hand |>
         MultiSet.fold (fun _ x i -> forcePrint (sprintf "%d -> (%A, %d)\n" x (Map.find x pieces) i)) ()
 
-module State = 
-    // Make sure to keep your state localised in this module. It makes your life a whole lot easier.
-    // Currently, it only keeps track of your hand, your player numer, your board, and your dictionary,
-    // but it could, potentially, keep track of other useful
-    // information, such as number of players, player turn, etc.
-
-    type state = {
-        // board         : Parser.board
-        board         : Map<int*int, char*int>
-        dict          : ScrabbleUtil.Dictionary.Dict
-        playerNumber  : uint32
-        hand          : MultiSet.MultiSet<uint32>
-    }
-
-    let mkState b d pn h = {
-        // board = b;
-        board = b
-        dict = d
-        playerNumber = pn
-        hand = h
-    }
-
-    let board st         = st.board
-    let dict st          = st.dict
-    let playerNumber st  = st.playerNumber
-    let hand st          = st.hand
 
 module GenerateMove =
     
@@ -82,6 +56,7 @@ module GenerateMove =
         ()
 module Scrabble =
     open System.Threading
+    open Solver
     let fst (a, _, _) = a
     let snd (_, b, _) = b
     let trd (_, _, c) = c
@@ -89,6 +64,7 @@ module Scrabble =
     let fstTuple (a, _) = a
     let sndTuple (_, b) = b
     
+   
     let toBoardState ms = ms |> List.map (fun (coord, (tid, (c, v))) ->
                     coord, (c, v)
                 )
@@ -98,8 +74,7 @@ module Scrabble =
     let getWordFromHand (hand: char list) (st: State.state): string =
         rotateFold2 hand
         ""
-    // % a k j l i t o
-    // a 
+        
     let rec findSuitable (hand: char list) (acc: char list) (dict : Dictionary.Dict) =
         match hand with
         | [] -> None
@@ -222,16 +197,24 @@ module Scrabble =
                 aux xs (acc + (generateValidMoveForApiFromLetter x newCoord)) (offset + 1)
         aux move "" 0
         
+    let getMoves letters state isStartMove =
+        if isStartMove then
+            ((findAllWordsFromRack letters state) |> List.sortByDescending List.length)[0] // No error handling here
+        else
+            let ret = fbm Direction.horizontal state
+            debugPrint (sprintf "%A\n" (ret))
+            ret |> Seq.head |> List.head |> List.head |> Seq.toList
+            
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
         let rec aux (st : State.state) =
             Print.printHand pieces (State.hand st)
             debugPrint (sprintf "This is the hand keys: %A\n" (MultiSet.getKeys st.hand))
-            
+             
             let lettersHand = uintArrayToLetters (MultiSet.getKeys st.hand)
             
-            let startMove = (((findAllWordsFromRack lettersHand st) |> List.sortByDescending List.length)[0]) // No error handling here
+            let startMove = getMoves lettersHand st (Map.isEmpty st.board) // No error handling here
             
-            printfn "%A\n" (startMove)
+            printfn "startmove: %A\n" (startMove)
             printfn "%A\n" (generateValidMoveForApiFromCharList startMove (0,0))
             
             forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
@@ -246,7 +229,7 @@ module Scrabble =
             //      if there is a character move to that one and try to make a word
             
             
-            let input =  System.Console.ReadLine()
+            // let input =  System.Console.ReadLine()
             // let move = RegEx.parseMove input
             let move = RegEx.parseMove (generateValidMoveForApiFromCharList startMove (0,0)) 
             
