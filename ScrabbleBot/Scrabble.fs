@@ -203,7 +203,7 @@ module Scrabble =
         else
             let ret = fbm Direction.horizontal state
             debugPrint (sprintf "%A\n" (ret))
-            ret |> Seq.head |> List.head |> List.head |> Seq.toList
+            ret |> Seq.head |> List.head |> Seq.toList
             
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
         let rec aux (st : State.state) =

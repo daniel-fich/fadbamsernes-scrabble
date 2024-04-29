@@ -97,7 +97,7 @@ module internal Solver
     let generate_moves ((x,y): int*int) (dir: Direction) (state: state) =
         let arc = state.dict
         let ret = gen (x,y) 0 [] state [] dir
-        ret
+        ("", ret) ||> List.fold (fun acc item -> if String.length item > String.length acc then item else acc)
             
     let fbm (dir: Direction) (state: state) =
         let b = state.board
