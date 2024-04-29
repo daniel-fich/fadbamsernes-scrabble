@@ -199,11 +199,12 @@ module Scrabble =
         
     let getMoves letters state isStartMove =
         if isStartMove then
-            ((findAllWordsFromRack letters state) |> List.sortByDescending List.length)[0] // No error handling here
+            ((findAllWordsFromRack letters state) |> List.sortByDescending List.length)[0], (0,0) // No error handling here
         else
             let ret = fbm Direction.horizontal state
             debugPrint (sprintf "%A\n" (ret))
-            ret |> Seq.head |> List.head |> Seq.toList
+            let pos, str = ret |> Seq.head |> List.head
+            str |> Seq.toList, pos
             
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
         let rec aux (st : State.state) =
@@ -212,10 +213,10 @@ module Scrabble =
              
             let lettersHand = uintArrayToLetters (MultiSet.getKeys st.hand)
             
-            let startMove = getMoves lettersHand st (Map.isEmpty st.board) // No error handling here
+            let startMove, pos = getMoves lettersHand st (Map.isEmpty st.board) // No error handling here
             
             printfn "startmove: %A\n" (startMove)
-            printfn "%A\n" (generateValidMoveForApiFromCharList startMove (0,0))
+            printfn "%A\n" (generateValidMoveForApiFromCharList startMove pos)
             
             forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
             
@@ -231,7 +232,7 @@ module Scrabble =
             
             // let input =  System.Console.ReadLine()
             // let move = RegEx.parseMove input
-            let move = RegEx.parseMove (generateValidMoveForApiFromCharList startMove (0,0)) 
+            let move = RegEx.parseMove (generateValidMoveForApiFromCharList startMove pos) 
             
             debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
             send cstream (SMPlay move)

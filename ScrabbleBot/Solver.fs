@@ -105,7 +105,7 @@ module internal Solver
         k |> Seq.map (fun pos ->
             find_anchors pos b
             |> List.map (fun pos ->
-                generate_moves pos Direction.vertical state
+                pos,generate_moves pos Direction.horizontal state
         ))
             
             
