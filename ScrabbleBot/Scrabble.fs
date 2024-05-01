@@ -323,7 +323,7 @@ module Scrabble =
             false
              
         
-    let fuck (x,y) direction lettersHand (st : State.state) =
+    let validWordsAt (x,y) direction lettersHand (st : State.state) =
         let startWord = findStartWordDir (x,y) st.board direction
         let permutationsFromRack = makePermutations lettersHand
         
@@ -376,7 +376,7 @@ module Scrabble =
             
            
             System.Console.ReadLine() 
-            printfn "this is fuck %A\n" (fuck (0,1) "horizontal" lettersHand st)
+            printfn "this is fuck %A\n" (validWordsAt (0,1) "horizontal" lettersHand st)
             System.Console.ReadLine() 
             
             // let input =  System.Console.ReadLine()
