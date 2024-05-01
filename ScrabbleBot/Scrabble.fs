@@ -223,23 +223,12 @@ module Scrabble =
             let wordInDict (word: char list) =
                 let word = word |> List.toArray |> String.Concat
                 Dictionary.lookup word state.dict
-            let ret = fbm Direction.horizontal state
-            // let ret = fbm Direction.vertical state
-            debugPrint (sprintf "%A\n" (ret)) 
-            let coord,acc = ret |> List.filter (fun (_, word) -> wordInDict word) |> List.head
+            let ret = fbm Direction.horizontal state @ fbm Direction.vertical state
+            let coord,acc,dir = ret |> List.filter (fun (_, word,_) -> wordInDict word) |> List.sortByDescending (fun (_, s,_) -> s.Length) |> List.head
             
-            let removedOverlapping = removeOverlappingLettersOnBoard acc coord state.board Direction.horizontal
-            generateApiMoveFromCoordCharList removedOverlapping
-            
-            // [], (0,0)
-            // acc,coord
-            // let pos = southPoint state
-            // let leftMoves = generateLeftSide state
-            // let rightMoves = generateRightSide state
-            // if List.isEmpty leftMoves then
-            //     rightMoves, pos
-            // else
-            //     leftMoves, pos
+            let removedOverlapping = removeOverlappingLettersOnBoard acc coord state.board dir 
+            let ret = generateApiMoveFromCoordCharList removedOverlapping
+            ret
             
             
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
