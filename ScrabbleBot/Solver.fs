@@ -92,7 +92,6 @@ module internal Solver
             let newAcc = conditionalAppend ((x',y'),newWord |> Array.ofList |> String.Concat) acc (lookup (Char.ToString letter) state.dict && not rightTaken)
             if Option.isSome newArc && not rightTaken then
                 let newDict = Option.get newArc |> snd
-                printfn "Oooooga: %A with pos: %A %A" newWord pos (x,y)
                 gen (x, y) (pos+1) word {state with dict = newDict} newAcc direction
             else newAcc
             
@@ -105,6 +104,16 @@ module internal Solver
                    else
                        elm :: acc
                )
+               
+    // let find_connected ((x,y): int*int) (board: Map<int*int, char*int>) =
+    //        let viable = [x,y+1;x,y-1;x+1,y;x-1,y]
+    //        ([],viable) ||>
+    //            List.fold (fun acc elm ->
+    //                if Map.containsKey elm board then
+    //                    elm :: acc
+    //                else
+    //                    acc
+    //            )
             
     let generate_moves ((x,y): int*int) (dir: Direction) (state: state) =
         let ret = gen (x,y) 0 [] state [] dir

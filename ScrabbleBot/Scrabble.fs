@@ -217,20 +217,140 @@ module Scrabble =
             //     rightMoves, pos
             // else
             //     leftMoves, pos
+           
+    let findStartWordDir (x, y)  (board: Map<int*int,char*int>) direction =
+        let rec aux (x, y) dir (acc: char list) =
+            if Map.containsKey (x, y) board then
+                match dir with
+                | "horizontal" ->
+                    let c = fstTuple (Map.find (x, y) board)
+                    aux (x-1, y) dir (c :: acc)
+                | "vertical" ->
+                    let c = fstTuple (Map.find (x, y) board)
+                    aux (x, y-1) dir (c :: acc)
+            else
+                acc
+                    
+        aux (x,y) direction []
+        
+    let findEndWordDir (x, y)  (board: Map<int*int,char*int>) direction =
+        let rec aux (x, y) dir (acc: char list) =
+            if Map.containsKey (x, y) board then
+                match dir with
+                | "horizontal" ->
+                    let c = fstTuple (Map.find (x, y) board)
+                    aux (x+1, y) dir (c :: acc)
+                | "vertical" ->
+                    let c = fstTuple (Map.find (x, y) board)
+                    aux (x, y+1) dir (c :: acc)
+            else
+                acc
+                    
+        aux (x,y) direction [] |> List.rev
+     
+    let rec makePermutations rack =
+        let permutationCount = 2f ** (List.length rack |> float32) |> int
+        
+        let makePermutation letters funnyNumber =
+            let rec aux letters funnyNumber list =
+                match letters with
+                | [] -> list
+                | letter :: letters' ->
+                    let newList = if funnyNumber % 2 = 1 then letter :: list else list
+                    aux letters' (funnyNumber / 2) newList
+            aux (List.rev letters) funnyNumber []
+        
+        List.init permutationCount (makePermutation rack)
+   
+    let validate (x,y) direction offset word (st : State.state) =
+        let rec aux (x,y) offset =
+            if Map.containsKey (x,y) st.board then
+                match direction with
+                | "horizontal" ->
+                    let has_left = Map.containsKey (x + offset - 1, y) st.board
+                    let has_right = Map.containsKey (x + offset + 1, y) st.board
+                    
+                    let sw =
+                        if has_left then
+                            let c,_ = Map.find (x, y) st.board
+                            findStartWordDir (x + offset - 1,y) st.board direction @ [c]
+                        else if has_right then
+                            let c,_ = Map.find (x, y) st.board
+                            c :: findEndWordDir (x + offset + 1,y) st.board direction
+                        else
+                            []
+                    let word = sw |> Array.ofList |> String.Concat
+                    let exists = Dictionary.lookup word
+                    
+                    printfn "IN HORIZONTAL VALIDATION: %A %A\n" (word) (exists)
+                    
+                    let current = (x+offset, y)
+                    aux current (offset + 1)
+                | "vertical" ->
+                    let has_left = Map.containsKey (x, y + offset - 1) st.board
+                    let has_right = Map.containsKey (x, y + offset + 1) st.board
+                    
+                    let sw =
+                        if has_left then
+                            let c,_ = Map.find (x, y) st.board
+                            findStartWordDir (x, y + offset - 1) st.board direction @ [c]
+                        else if has_right then
+                            let c,_ = Map.find (x, y) st.board
+                            c :: findEndWordDir (x, y + offset + 1) st.board direction
+                        else
+                            []
+                    let word = sw |> Array.ofList |> String.Concat
+                    let exists = Dictionary.lookup word
+                    
+                    printfn "IN VERTICAL VALIDATION: %A %A\n" (word) (exists)
+                    
+                    let current = (x+offset, y)
+                    aux current (offset + 1)
+                else
+                    0
+                    
+        aux (x,y) 0
+             
             
+        
+    let fuck (x,y) direction lettersHand (st : State.state) =
+        if Map.containsKey (x,y) st.board then
+            let startWord = findStartWordDir (x,y) st.board direction
+            let permutationsFromRack = makePermutations lettersHand
             
+            match direction with
+            | "horizontal" ->
+                for permutationHand in permutationsFromRack do
+                    let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st)
+                    validate (x,y) direction 0 currentWord st
+            | "vertical" ->
+                for permutationHand in permutationsFromRack do
+                    let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st)
+                    validate (x,y) direction 0 currentWord st
+        else
+            ()
+        
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
         let rec aux (st : State.state) counter=
             Print.printHand pieces (State.hand st)
             debugPrint (sprintf "This is the hand keys: %A\n" (MultiSet.getKeys st.hand))
              
             let lettersHand = uintArrayToLetters (MultiSet.getKeys st.hand)
+            fuck (0,0) "horizontal" lettersHand st
+            
+            // printfn "anchors: %A\n" ((find_anchors (0,0)) st.board)
+            
             
             let startMove, pos = getMoves lettersHand st (Map.isEmpty st.board) // No error handling here
+           
+            // printfn "startmove: %A\n" (startMove)
+            // printfn "%A\n" (generateValidMoveForApiFromCharList startMove pos)
             
-            printfn "startmove: %A\n" (startMove)
-            printfn "%A\n" (generateValidMoveForApiFromCharList startMove pos)
             
+            
+            
+            // findEndWordDir (0,3) st.board "vertical"
+             
             forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
             
             // Pseudo algorithm for choosing a word
@@ -242,7 +362,8 @@ module Scrabble =
             //      check that there are no characters at current pos x+-1
             //      if there is a character move to that one and try to make a word
             
-            
+           
+            System.Console.ReadLine() 
             // let input =  System.Console.ReadLine()
             // let move = RegEx.parseMove input
             let horOrVer = if Map.isEmpty st.board then Direction.vertical else Direction.horizontal

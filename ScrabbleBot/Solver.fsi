@@ -8,3 +8,4 @@ module internal Solver
     
     val fbm : Direction -> state -> ((int*int)*string) list 
    
+    val find_anchors: (int*int) -> (Map<int*int, char*int>) -> (int*int) list
