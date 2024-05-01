@@ -322,27 +322,38 @@ module Scrabble =
         else
             false
              
-            
         
     let fuck (x,y) direction lettersHand (st : State.state) =
-        if Map.containsKey (x,y) st.board then
-            let startWord = findStartWordDir (x,y) st.board direction
-            let permutationsFromRack = makePermutations lettersHand
-            
-            match direction with
-            | "horizontal" ->
-                for permutationHand in permutationsFromRack do
-                    let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st)
-                    if currentWord <> [] then
-                        printfn "%A %A\n" (currentWord) (validate (x,y) direction currentWord st)
-            | "vertical" ->
-                for permutationHand in permutationsFromRack do
-                    let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st)
-                    if currentWord <> [] then
-                        printfn "%A %A\n" (currentWord) (validate (x,y) direction currentWord st)
-        else
-            ()
+        let startWord = findStartWordDir (x,y) st.board direction
+        let permutationsFromRack = makePermutations lettersHand
         
+        List.fold
+            (fun acc permutationHand ->
+                let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st)
+                if currentWord <> [] && (validate (x,y) direction currentWord st)
+                then currentWord :: acc
+                else acc
+            )
+            []
+            permutationsFromRack
+            
+           // (((0,0),[]), permutationsFromRack) ||> List.fold (fun acc permutationHand ->
+           //     let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st)
+           //     if currentWord <> [] then
+           //         printfn "%A %A\n" (currentWord) (validate (x,y) direction currentWord st)
+           //         if validate (x,y) direction currentWord st then
+           //             (x,y), currentWord
+           //         else
+           //             acc
+           //     else
+           //        acc
+           //        )
+            
+            //for permutationHand in permutationsFromRack do
+            //    let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st)
+            //    if currentWord <> [] then
+            //        printfn "%A %A\n" (currentWord) (validate (x,y) direction currentWord st)
+
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
         let rec aux (st : State.state) counter=
             Print.printHand pieces (State.hand st)
@@ -365,7 +376,7 @@ module Scrabble =
             
            
             System.Console.ReadLine() 
-            fuck (0,1) "horizontal" lettersHand st
+            printfn "this is fuck %A\n" (fuck (0,1) "horizontal" lettersHand st)
             System.Console.ReadLine() 
             
             // let input =  System.Console.ReadLine()
