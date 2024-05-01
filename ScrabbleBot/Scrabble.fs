@@ -208,7 +208,7 @@ module Scrabble =
         else
             let ret = fbm Direction.horizontal state
             debugPrint (sprintf "%A\n" (ret))
-            let pos, str = ret |> List.head
+            let pos, str = ret |> Seq.head |> List.head |> List.head
             str |> Seq.toList, pos
             // let pos = southPoint state
             // let leftMoves = generateLeftSide state

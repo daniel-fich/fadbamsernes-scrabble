@@ -45,9 +45,13 @@ module internal Solver
         else if not (isEmpty state.hand) then
             ([], getKeys state.hand) ||> List.fold (fun acc' item ->
                 let letter = uintToLetter item
-                let nextHand = removeSingle (asciiLetterToAlphabetPos letter) state.hand
-                // let isTerminal, nextDict = step letter state.dict |> Option.get
-                goon pos (x,y) letter word nextHand (step letter state.dict) acc state direction |> (@) acc'
+                let nextDict = (step letter state.dict)
+                if nextDict |> Option.isSome then
+                    let nextHand = removeSingle (asciiLetterToAlphabetPos letter) state.hand
+                    // let isTerminal, nextDict = step letter state.dict |> Option.get
+                    goon pos (x,y) letter word nextHand nextDict acc state direction |> (@) acc'
+                else
+                    acc'
             )
         else
             acc
@@ -64,7 +68,7 @@ module internal Solver
                 let newDict = Option.get newArc |> snd
                 let fstStmnt =
                     if not leftTaken then
-                        gen (x, y) (pos-1) newWord {state with dict = newDict; hand = rack } newAcc direction @ newAcc
+                        gen (x, y) (1) newWord {state with dict = newDict; hand = rack } newAcc direction @ newAcc
                     else
                         newAcc
                 let newNewDict = reverse newDict
@@ -97,20 +101,20 @@ module internal Solver
             
     let generate_moves ((x,y): int*int) (dir: Direction) (state: state) =
         let ret = gen (x,y) 0 [] state [] dir
-        (((0,0),""), ret) ||> List.fold (fun acc item -> if String.length (snd item) > String.length (snd acc) then item else acc)
+        // (((0,0),""), ret) ||> List.fold (fun acc item -> if String.length (snd item) > String.length (snd acc) then item else acc)
         ret
             
     let fbm (dir: Direction) (state: state) =
         let b = state.board
         let k = b.Keys
-        // let res = k |> Seq.map (fun pos ->
-        //     let a = find_anchors pos b
-        //     a |> List.map (fun pos ->
-        //     generate_moves pos Direction.horizontal state
-        // ))
+        let res = k |> Seq.map (fun pos ->
+            let a = find_anchors pos b
+            a |> List.map (fun pos ->
+            generate_moves pos Direction.horizontal state
+        ))
         
-        // res
+        res
             
-        let ret = generate_moves (0,0) Direction.horizontal state
-        ret
+        // let ret = generate_moves (0,0) Direction.horizontal state
+        // ret
             
