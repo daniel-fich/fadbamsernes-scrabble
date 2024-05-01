@@ -262,54 +262,65 @@ module Scrabble =
         
         List.init permutationCount (makePermutation rack)
    
-    let validate (x,y) direction offset word (st : State.state) =
+    let validate (x,y) direction word (st : State.state) =
+        printfn "current word in validate is: %A\n" word
+        
+        // let rec aux2 offset =
+        //     if offset = String.length word
+        //     then true
+        //     else true
+        
         let rec aux (x,y) offset =
             if Map.containsKey (x,y) st.board then
                 match direction with
                 | "horizontal" ->
-                    let has_left = Map.containsKey (x + offset - 1, y) st.board
-                    let has_right = Map.containsKey (x + offset + 1, y) st.board
+                    let has_left = Map.containsKey (x , y - 1) st.board
+                    let has_right = Map.containsKey (x , y + 1) st.board
                     
                     let sw =
                         if has_left then
+                            // findStartWordDir (x, y - 1) st.board "vertical"
                             let c,_ = Map.find (x, y) st.board
-                            findStartWordDir (x + offset - 1,y) st.board direction @ [c]
+                            (findStartWordDir(x, y-1) st.board "vertical") @ (c :: findEndWordDir (x, y + 1) st.board "vertical")
                         else if has_right then
                             let c,_ = Map.find (x, y) st.board
-                            c :: findEndWordDir (x + offset + 1,y) st.board direction
+                            c :: findEndWordDir (x, y + 1) st.board "vertical" 
                         else
                             []
                     let word = sw |> Array.ofList |> String.Concat
-                    let exists = Dictionary.lookup word
-                    
-                    printfn "IN HORIZONTAL VALIDATION: %A %A\n" (word) (exists)
-                    
-                    let current = (x+offset, y)
-                    aux current (offset + 1)
+                    let exists = Dictionary.lookup word st.dict
+                  
+                    if not exists then
+                        false
+                    else
+                        aux (x + 1, y) 0
                 | "vertical" ->
-                    let has_left = Map.containsKey (x, y + offset - 1) st.board
-                    let has_right = Map.containsKey (x, y + offset + 1) st.board
+                    let has_left = Map.containsKey (x - 1, y) st.board
+                    let has_right = Map.containsKey (x + 1, y) st.board
                     
                     let sw =
                         if has_left then
-                            let c,_ = Map.find (x, y) st.board
-                            findStartWordDir (x, y + offset - 1) st.board direction @ [c]
+                            findStartWordDir (x - 1, y) st.board "horizontal"
                         else if has_right then
                             let c,_ = Map.find (x, y) st.board
-                            c :: findEndWordDir (x, y + offset + 1) st.board direction
+                            c :: findEndWordDir (x + 1, y) st.board "horizontal"
                         else
                             []
                     let word = sw |> Array.ofList |> String.Concat
-                    let exists = Dictionary.lookup word
+                    let exists = Dictionary.lookup word st.dict
                     
-                    printfn "IN VERTICAL VALIDATION: %A %A\n" (word) (exists)
-                    
-                    let current = (x+offset, y)
-                    aux current (offset + 1)
+                    if not exists then
+                        false
+                    else
+                        aux (x + 1, y) 0
                 else
-                    0
+                    true
                     
-        aux (x,y) 0
+         
+        if Map.containsKey (x,y) st.board then
+            aux (x,y) 0
+        else
+            false
              
             
         
@@ -322,11 +333,13 @@ module Scrabble =
             | "horizontal" ->
                 for permutationHand in permutationsFromRack do
                     let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st)
-                    validate (x,y) direction 0 currentWord st
+                    if currentWord <> [] then
+                        printfn "%A %A\n" (currentWord) (validate (x,y) direction currentWord st)
             | "vertical" ->
                 for permutationHand in permutationsFromRack do
                     let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st)
-                    validate (x,y) direction 0 currentWord st
+                    if currentWord <> [] then
+                        printfn "%A %A\n" (currentWord) (validate (x,y) direction currentWord st)
         else
             ()
         
@@ -336,21 +349,9 @@ module Scrabble =
             debugPrint (sprintf "This is the hand keys: %A\n" (MultiSet.getKeys st.hand))
              
             let lettersHand = uintArrayToLetters (MultiSet.getKeys st.hand)
-            fuck (0,0) "horizontal" lettersHand st
-            
-            // printfn "anchors: %A\n" ((find_anchors (0,0)) st.board)
-            
             
             let startMove, pos = getMoves lettersHand st (Map.isEmpty st.board) // No error handling here
-           
-            // printfn "startmove: %A\n" (startMove)
-            // printfn "%A\n" (generateValidMoveForApiFromCharList startMove pos)
             
-            
-            
-            
-            // findEndWordDir (0,3) st.board "vertical"
-             
             forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
             
             // Pseudo algorithm for choosing a word
@@ -364,6 +365,9 @@ module Scrabble =
             
            
             System.Console.ReadLine() 
+            fuck (0,1) "horizontal" lettersHand st
+            System.Console.ReadLine() 
+            
             // let input =  System.Console.ReadLine()
             // let move = RegEx.parseMove input
             let horOrVer = if Map.isEmpty st.board then Direction.vertical else Direction.horizontal
