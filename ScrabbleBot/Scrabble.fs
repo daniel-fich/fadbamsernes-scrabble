@@ -262,13 +262,8 @@ module Scrabble =
         
         List.init permutationCount (makePermutation rack)
    
-    let validate (x,y) direction word (st : State.state) =
+    let validate (x,y) direction (word: char list) (st : State.state) =
         printfn "current word in validate is: %A\n" word
-        
-        // let rec aux2 offset =
-        //     if offset = String.length word
-        //     then true
-        //     else true
         
         let rec aux (x,y) offset =
             if Map.containsKey (x,y) st.board then
@@ -276,20 +271,31 @@ module Scrabble =
                 | "horizontal" ->
                     let has_left = Map.containsKey (x , y - 1) st.board
                     let has_right = Map.containsKey (x , y + 1) st.board
+                   
+                    printfn "has_left %A : has_right %A\n"  has_left has_right
                     
                     let sw =
-                        if has_left then
-                            // findStartWordDir (x, y - 1) st.board "vertical"
-                            let c,_ = Map.find (x, y) st.board
-                            (findStartWordDir(x, y-1) st.board "vertical") @ (c :: findEndWordDir (x, y + 1) st.board "vertical")
-                        else if has_right then
-                            let c,_ = Map.find (x, y) st.board
-                            c :: findEndWordDir (x, y + 1) st.board "vertical" 
+                        if Map.containsKey (x, y) st.board then
+                            if has_left then
+                                printfn "Has left entered\n"
+                                let c,_ = Map.find (x, y) st.board
+                                // (findStartWordDir(x, y-1) st.board "vertical") @ (c :: findEndWordDir (x, y + 1) st.board "vertical")
+                                word @ (c :: findEndWordDir (x, y + 1) st.board "vertical")
+                            else if has_right then
+                                printfn "Has right entered\n"
+                                let c,_ = Map.find (x, y) st.board
+                                c :: findEndWordDir (x, y + 1) st.board "vertical"
+                            else
+                                []
                         else
                             []
-                    let word = sw |> Array.ofList |> String.Concat
-                    let exists = Dictionary.lookup word st.dict
-                  
+                            
+                    let newWord = sw |> Array.ofList |> String.Concat
+                    printfn "newWord %A\n" newWord
+                    
+                    let exists = Dictionary.lookup newWord st.dict
+                    printfn "exists %A\n" exists
+                    
                     if not exists then
                         false
                     else
@@ -301,14 +307,16 @@ module Scrabble =
                     let sw =
                         if has_left then
                             let c,_ = Map.find (x, y) st.board
-                            (findStartWordDir(x-1, y) st.board "horizontal") @ (c :: findEndWordDir (x + 1, y) st.board "horizontal")
+                            //(findStartWordDir(x-1, y) st.board "horizontal") @ (c :: findEndWordDir (x + 1, y) st.board "horizontal")
+                            word @ (c :: findEndWordDir (x, y + 1) st.board "vertical")
                         else if has_right then
                             let c,_ = Map.find (x, y) st.board
                             c :: findEndWordDir (x + 1, y) st.board "horizontal"
                         else
                             []
-                    let word = sw |> Array.ofList |> String.Concat
-                    let exists = Dictionary.lookup word st.dict
+                            
+                    let newWord = sw |> Array.ofList |> String.Concat
+                    let exists = Dictionary.lookup newWord st.dict
                     
                     if not exists then
                         false
@@ -317,7 +325,6 @@ module Scrabble =
                 else
                     true
                     
-         
         if Map.containsKey (x,y) st.board then
             aux (x,y) 0
         else
@@ -330,32 +337,15 @@ module Scrabble =
         
         printfn "Using startword %A\n" startWord
         
-        List.fold
+        (List.fold
             (fun acc permutationHand ->
                 let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st)
-                if currentWord <> [] && (validate (x,y) direction currentWord st)
+                if currentWord <> [] && (validate (x,y) direction currentWord[0] st)
                 then currentWord :: acc
                 else acc
             )
             []
-            permutationsFromRack
-            
-           // (((0,0),[]), permutationsFromRack) ||> List.fold (fun acc permutationHand ->
-           //     let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st)
-           //     if currentWord <> [] then
-           //         printfn "%A %A\n" (currentWord) (validate (x,y) direction currentWord st)
-           //         if validate (x,y) direction currentWord st then
-           //             (x,y), currentWord
-           //         else
-           //             acc
-           //     else
-           //        acc
-           //        )
-            
-            //for permutationHand in permutationsFromRack do
-            //    let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st)
-            //    if currentWord <> [] then
-            //        printfn "%A %A\n" (currentWord) (validate (x,y) direction currentWord st)
+            permutationsFromRack, startWord)
 
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
         let rec aux (st : State.state) counter=
@@ -367,18 +357,6 @@ module Scrabble =
             let startMove, pos = getMoves lettersHand st (Map.isEmpty st.board) // No error handling here
             
             forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
-            
-            // Pseudo algorithm for choosing a word
-            // if Map.isEmpty st.board then
-            //      greedily get the first completed word
-            //      make some formatting function and set input
-            // else
-            //      get the first character from the board and try to make a word
-            //      check that there are no characters at current pos x+-1
-            //      if there is a character move to that one and try to make a word
-            
-           
-            // printfn "this is fuck horizontal %A\n" (validWordsAt (0,startMove.Length-1) "horizontal" lettersHand st)
             
             // let input =  System.Console.ReadLine()
             // let move = RegEx.parseMove inpt
@@ -393,7 +371,6 @@ module Scrabble =
                 else
                     printfn "This is your hand: %A\n" lettersHand
                     
-                    // let horOrVer = if direction = "horizontal" then st.board then Direction.horizontal else Direction.vertical
                     Console.ReadLine()
                     
                     printfn("Please enter your x now: ")
@@ -411,7 +388,10 @@ module Scrabble =
                         else
                             Direction.horizontal
                            
-                    let generatedMove = (validWordsAt (x,y) direction lettersHand st)[0][0][1..]
+                    let move, startWord = (validWordsAt (x,y) direction lettersHand st)// [0][0][1..]
+                    let knownSize = List.length startWord
+                    
+                    let generatedMove = move[0][0][knownSize..]
                     
                     let regexMove =
                         match actualDirection with
