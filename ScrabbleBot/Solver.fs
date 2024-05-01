@@ -18,7 +18,7 @@ module internal Solver
         if offset >= 0 && offset < 26 then
             char (baseAscii + offset)
         else
-            failwith "Input uint must be between 1 and 26"
+            ' '
     let asciiLetterToAlphabetPos (letter: char): uint32 =
         let uppercaseLetter = Char.ToUpper letter
         let asciiA = uint32 'A'
@@ -38,8 +38,9 @@ module internal Solver
         else
             (x,y+pos)
     let rec gen (x,y) (pos: int) (word: char list) (state:state) (acc: ((int*int)*string) list) direction =
-        if Map.containsKey (x,y) state.board then
-            let letter,_ = Map.find (x,y) state.board
+        let offset = posToCoord (x,y) pos direction
+        if Map.containsKey offset state.board then
+            let letter,_ = Map.find offset state.board
             // let isTerminal, nextDict = step letter state.dict |> Option.get
             goon pos (x,y) letter word state.hand (step letter state.dict) acc state direction
         else if not (isEmpty state.hand) then
@@ -49,7 +50,7 @@ module internal Solver
                 if nextDict |> Option.isSome then
                     let nextHand = removeSingle (asciiLetterToAlphabetPos letter) state.hand
                     // let isTerminal, nextDict = step letter state.dict |> Option.get
-                    goon pos (x,y) letter word nextHand nextDict acc state direction |> (@) acc'
+                    goon pos (x,y) letter word nextHand nextDict acc state direction
                 else
                     acc'
             )
@@ -63,19 +64,24 @@ module internal Solver
             let newWord = letter :: word
             let stepLetter = step letter state.dict
             let isEndOfWord = if Option.isSome stepLetter then stepLetter |> Option.get |> fst else false
-            let newAcc = conditionalAppend ((x',y'),newWord |> Array.ofList |> String.Concat) acc (Option.isSome stepLetter && not leftTaken)
+            let newAcc = conditionalAppend ((x',y'), newWord
+                                                    |> Array.ofList
+                                                    |> String.Concat) acc (
+                                                        Option.isSome stepLetter
+                                                        && not leftTaken
+                                                        && not rightTaken)
             if Option.isSome newArc then
                 let newDict = Option.get newArc |> snd
                 let fstStmnt =
                     if not leftTaken then
-                        gen (x, y) (1) newWord {state with dict = newDict; hand = rack } newAcc direction @ newAcc
+                        (gen (x, y) (pos-1) newWord {state with dict = newDict; hand = rack } newAcc direction) 
                     else
                         newAcc
                 let newNewDict = reverse newDict
                 let sndStmnt =
                     if Option.isSome newNewDict && not leftTaken && not rightTaken then
                       let newNewNewDict = Option.get newNewDict |> snd
-                      gen (x,y) 1 word {state with dict = newNewNewDict; hand = rack } newAcc direction @ newAcc
+                      (gen (x,y) 1 word {state with dict = newNewNewDict; hand = rack } newAcc direction)
                     else
                         newAcc
                 fstStmnt @ sndStmnt
@@ -83,9 +89,10 @@ module internal Solver
                 newAcc
         else
             let newWord = word @ [letter]
-            let newAcc = conditionalAppend ((x,y),newWord |> Array.ofList |> String.Concat) acc (lookup (Char.ToString letter) state.dict && not rightTaken)
+            let newAcc = conditionalAppend ((x',y'),newWord |> Array.ofList |> String.Concat) acc (lookup (Char.ToString letter) state.dict && not rightTaken)
             if Option.isSome newArc && not rightTaken then
                 let newDict = Option.get newArc |> snd
+                printfn "Oooooga: %A with pos: %A %A" newWord pos (x,y)
                 gen (x, y) (pos+1) word {state with dict = newDict} newAcc direction
             else newAcc
             
@@ -107,14 +114,14 @@ module internal Solver
     let fbm (dir: Direction) (state: state) =
         let b = state.board
         let k = b.Keys
-        let res = k |> Seq.map (fun pos ->
-            let a = find_anchors pos b
-            a |> List.map (fun pos ->
-            generate_moves pos Direction.horizontal state
-        ))
-        
-        res
+        // let res = k |> Seq.map (fun pos ->
+        //     let a = find_anchors pos b
+        //     a |> List.map (fun pos ->
+        //     generate_moves pos dir state
+        // ))
+        //
+        // res
             
-        // let ret = generate_moves (0,0) Direction.horizontal state
-        // ret
+        let ret = generate_moves (-1,0) Direction.horizontal state
+        ret
             

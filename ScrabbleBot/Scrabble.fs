@@ -95,7 +95,7 @@ module Scrabble =
         if offset >= 0 && offset < 26 then
             char (baseAscii + offset)
         else
-            failwith "Input uint must be between 1 and 26"
+            ' '
       
     let asciiLetterToAlphabetPos (letter: char) =
         let uppercaseLetter = Char.ToUpper letter
@@ -208,7 +208,7 @@ module Scrabble =
         else
             let ret = fbm Direction.horizontal state
             debugPrint (sprintf "%A\n" (ret))
-            let pos, str = ret |> Seq.head |> List.head |> List.head
+            let pos, str = ret |> List.head
             str |> Seq.toList, pos
             // let pos = southPoint state
             // let leftMoves = generateLeftSide state
@@ -220,7 +220,7 @@ module Scrabble =
             
             
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
-        let rec aux (st : State.state) =
+        let rec aux (st : State.state) counter=
             Print.printHand pieces (State.hand st)
             debugPrint (sprintf "This is the hand keys: %A\n" (MultiSet.getKeys st.hand))
              
@@ -250,7 +250,10 @@ module Scrabble =
             
             debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
             send cstream (SMPlay move)
-
+            if counter > 2 then
+                while true do
+                    ()
+                    
             let msg = recv cstream
             debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
 
@@ -265,21 +268,21 @@ module Scrabble =
                                |> MultiSet.ofList
                                |> MultiSet.subtract st.hand
                                |> MultiSet.union (MultiSet.ofListAmount newPieces)
-                aux {st with board = updated; hand = newHand }
+                aux {st with board = updated; hand = newHand } (counter+1)
             | RCM (CMPlayed (pid, ms, points)) ->
                 (* Successful play by other player. Update your state *)
                 let updated = (st.board, toBoardStateWId ms) ||> List.fold (fun s row -> Map.add (snd row) (trd row) s)
-                aux {st with board = updated }
+                aux {st with board = updated } (counter+1)
             | RCM (CMPlayFailed (pid, ms)) ->
                 (* Failed play. Update your state *)
                 let st' = st // This state needs to be updated
-                aux st'
+                aux st' (counter+1)
             | RCM (CMGameOver _) -> ()
             | RCM a -> failwith (sprintf "not implmented: %A" a)
-            | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st
+            | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st (counter+1)
 
 
-        aux st
+        aux st 0
 
     let startGame 
             (boardP : boardProg) 
