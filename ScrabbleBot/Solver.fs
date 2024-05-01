@@ -37,7 +37,7 @@ module internal Solver
             (x+pos, y)
         else
             (x,y+pos)
-    let rec gen (x,y) (pos: int) (word: char list) (state:state) (acc: string list) direction =
+    let rec gen (x,y) (pos: int) (word: char list) (state:state) (acc: ((int*int)*string) list) direction =
         if Map.containsKey (x,y) state.board then
             let letter,_ = Map.find (x,y) state.board
             // let isTerminal, nextDict = step letter state.dict |> Option.get
@@ -53,12 +53,13 @@ module internal Solver
             acc
     and goon pos (x,y) letter word rack newArc acc state direction =
         let x',y' = posToCoord (x,y) pos direction
-        let leftTaken = Map.containsKey (x',y') state.board
-        let rightTaken = Map.containsKey (x',y') state.board
+        let leftTaken = Map.containsKey (posToCoord (x,y) (pos-1) direction) state.board
+        let rightTaken = Map.containsKey (posToCoord (x,y) (pos+1) direction) state.board
         if pos <= 0 then
             let newWord = letter :: word
-            let lonoldarc = step letter state.dict
-            let newAcc = conditionalAppend (newWord |> Array.ofList |> String.Concat) acc (Option.isSome lonoldarc)
+            let stepLetter = step letter state.dict
+            let isEndOfWord = if Option.isSome stepLetter then stepLetter |> Option.get |> fst else false
+            let newAcc = conditionalAppend ((x',y'),newWord |> Array.ofList |> String.Concat) acc (Option.isSome stepLetter && not leftTaken)
             if Option.isSome newArc then
                 let newDict = Option.get newArc |> snd
                 let fstStmnt =
@@ -78,7 +79,7 @@ module internal Solver
                 newAcc
         else
             let newWord = word @ [letter]
-            let newAcc = conditionalAppend (newWord |> Array.ofList |> String.Concat) acc (lookup (Char.ToString letter) state.dict && not rightTaken)
+            let newAcc = conditionalAppend ((x,y),newWord |> Array.ofList |> String.Concat) acc (lookup (Char.ToString letter) state.dict && not rightTaken)
             if Option.isSome newArc && not rightTaken then
                 let newDict = Option.get newArc |> snd
                 gen (x, y) (pos+1) word {state with dict = newDict} newAcc direction
@@ -95,17 +96,21 @@ module internal Solver
                )
             
     let generate_moves ((x,y): int*int) (dir: Direction) (state: state) =
-        let arc = state.dict
         let ret = gen (x,y) 0 [] state [] dir
-        ("", ret) ||> List.fold (fun acc item -> if String.length item > String.length acc then item else acc)
+        (((0,0),""), ret) ||> List.fold (fun acc item -> if String.length (snd item) > String.length (snd acc) then item else acc)
+        ret
             
     let fbm (dir: Direction) (state: state) =
         let b = state.board
         let k = b.Keys
-        k |> Seq.map (fun pos ->
-            find_anchors pos b
-            |> List.map (fun pos ->
-                pos,generate_moves pos Direction.horizontal state
-        ))
+        // let res = k |> Seq.map (fun pos ->
+        //     let a = find_anchors pos b
+        //     a |> List.map (fun pos ->
+        //     generate_moves pos Direction.horizontal state
+        // ))
+        
+        // res
             
+        let ret = generate_moves (0,0) Direction.horizontal state
+        ret
             

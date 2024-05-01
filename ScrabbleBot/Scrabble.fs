@@ -55,8 +55,8 @@ module GenerateMove =
         // if po
         ()
 module Scrabble =
-    open System.Threading
     open Solver
+        
     let fst (a, _, _) = a
     let snd (_, b, _) = b
     let trd (_, _, c) = c
@@ -187,15 +187,20 @@ module Scrabble =
     
         sprintf "%d %d %d%c%d " (x) (y) (asciiLetterToAlphabetPos move) (move) (getPointsForLetter move)
      
-    let generateValidMoveForApiFromCharList (move: char list) (coordinate: int*int) =
+    let generateValidMoveForApiFromCharList (move: char list) (coordinate: int*int) (direction: Direction) =
         let rec aux move acc offset =
             match move with
             | [] ->
                 acc
             | x :: xs ->
-                let newCoord = (fstTuple coordinate, sndTuple coordinate + offset)
+                let newCoord =
+                    match direction with
+                    | Direction.horizontal -> (fstTuple coordinate + offset, sndTuple coordinate)
+                    | Direction.vertical -> (fstTuple coordinate, sndTuple coordinate + offset)
+                    | _ -> failwith "Not going to be hit"
                 aux xs (acc + (generateValidMoveForApiFromLetter x newCoord)) (offset + 1)
         aux move "" 0
+        
         
     let getMoves letters state isStartMove =
         if isStartMove then
@@ -203,8 +208,16 @@ module Scrabble =
         else
             let ret = fbm Direction.horizontal state
             debugPrint (sprintf "%A\n" (ret))
-            let pos, str = ret |> Seq.head |> List.head
+            let pos, str = ret |> List.head
             str |> Seq.toList, pos
+            // let pos = southPoint state
+            // let leftMoves = generateLeftSide state
+            // let rightMoves = generateRightSide state
+            // if List.isEmpty leftMoves then
+            //     rightMoves, pos
+            // else
+            //     leftMoves, pos
+            
             
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
         let rec aux (st : State.state) =
@@ -232,7 +245,8 @@ module Scrabble =
             
             // let input =  System.Console.ReadLine()
             // let move = RegEx.parseMove input
-            let move = RegEx.parseMove (generateValidMoveForApiFromCharList startMove pos) 
+            let horOrVer = if Map.isEmpty st.board then Direction.vertical else Direction.horizontal
+            let move = RegEx.parseMove (generateValidMoveForApiFromCharList startMove pos horOrVer) 
             
             debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
             send cstream (SMPlay move)
