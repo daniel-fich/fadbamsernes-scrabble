@@ -391,6 +391,8 @@ module Scrabble =
                     printf "REGEX GENERATED MOVE START: %A\n" regexMove
                     regexMove
                 else
+                    printfn "This is your hand: %A\n" lettersHand
+                    
                     // let horOrVer = if direction = "horizontal" then st.board then Direction.horizontal else Direction.vertical
                     Console.ReadLine()
                     
@@ -403,19 +405,25 @@ module Scrabble =
                     printfn("Please enter your direction now: ")
                     let direction = Console.ReadLine()
                     
-                    printf "This is the size of the Map: %A\n" Map.count
-           
-                    printfn "This is your hand: %A\n" lettersHand
-                    printfn "This is the coordinate of the end of the first word %A %A\n" (x, y) (Map.find (x, y) st.board)
-           
+                    let actualDirection =
+                        if direction = "vertical" then
+                            Direction.vertical
+                        else
+                            Direction.horizontal
+                           
                     let generatedMove = (validWordsAt (x,y) direction lettersHand st)[0][0][1..]
-                    printfn "This is the generated move %A\n" generatedMove
                     
-                    printf "HIT CUSTOM MOVE!!!!\n"
-                    let test = generateValidMoveForApiFromCharList generatedMove (x,y + 1) Direction.vertical
-                    printfn "This is the string for the custom generated move: %A\n" test
+                    let regexMove =
+                        match actualDirection with
+                        | Direction.horizontal ->
+                            let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList generatedMove (x + 1, y) actualDirection)
+                            
+                            regexMove
+                        | Direction.vertical ->
+                            let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList generatedMove (x, y + 1) actualDirection)
+                            
+                            regexMove
                     
-                    let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList generatedMove (x,y + 1) Direction.vertical)
                     printf "REGEX GENERATED MOVE: %A\n" regexMove
                     
                     regexMove
