@@ -202,14 +202,22 @@ module Scrabble =
         aux move "" 0
         
         
+    
     let getMoves letters state isStartMove =
         if isStartMove then
             ((findAllWordsFromRack letters state) |> List.sortByDescending List.length)[0], (0,0) // No error handling here
         else
+            let wordInDict (word: char list) =
+                let word = word |> List.toArray |> String.Concat
+                Dictionary.lookup word state.dict
             let ret = fbm Direction.horizontal state
-            debugPrint (sprintf "%A\n" (ret))
-            let pos, str = ret |> List.head
-            str |> Seq.toList, pos
+            // let ret = fbm Direction.vertical state
+            debugPrint (sprintf "%A\n" (ret)) 
+            let acc = ret |> List.filter (fun (_, word) -> wordInDict word)
+            
+            
+            [], (0,0)
+            // acc,coords
             // let pos = southPoint state
             // let leftMoves = generateLeftSide state
             // let rightMoves = generateRightSide state
@@ -228,24 +236,13 @@ module Scrabble =
             
             let startMove, pos = getMoves lettersHand st (Map.isEmpty st.board) // No error handling here
             
+            let horOrVer = if Map.isEmpty st.board then Direction.vertical else Direction.horizontal
             printfn "startmove: %A\n" (startMove)
-            printfn "%A\n" (generateValidMoveForApiFromCharList startMove pos)
+            printfn "%A\n" (generateValidMoveForApiFromCharList startMove pos horOrVer)
             
             forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
             
-            // Pseudo algorithm for choosing a word
-            // if Map.isEmpty st.board then
-            //      greedily get the first completed word
-            //      make some formatting function and set input
-            // else
-            //      get the first character from the board and try to make a word
-            //      check that there are no characters at current pos x+-1
-            //      if there is a character move to that one and try to make a word
-            
-            
-            // let input =  System.Console.ReadLine()
-            // let move = RegEx.parseMove input
-            let horOrVer = if Map.isEmpty st.board then Direction.vertical else Direction.horizontal
+            printfn "%A" horOrVer
             let move = RegEx.parseMove (generateValidMoveForApiFromCharList startMove pos horOrVer) 
             
             debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.

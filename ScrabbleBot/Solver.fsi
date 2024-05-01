@@ -6,5 +6,7 @@ module internal Solver
     
     type Rack = char list 
     
-    val fbm : Direction -> state -> ((int*int)*string) list 
+    // val fbm : Direction -> state -> Map<int*int,char> list list
+    // val fbm : Direction -> state -> string list list list
+    val fbm : Direction -> state -> ((int*int)*char list) list
    
