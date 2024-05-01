@@ -300,7 +300,8 @@ module Scrabble =
                     
                     let sw =
                         if has_left then
-                            findStartWordDir (x - 1, y) st.board "horizontal"
+                            let c,_ = Map.find (x, y) st.board
+                            (findStartWordDir(x-1, y) st.board "horizontal") @ (c :: findEndWordDir (x + 1, y) st.board "horizontal")
                         else if has_right then
                             let c,_ = Map.find (x, y) st.board
                             c :: findEndWordDir (x + 1, y) st.board "horizontal"
@@ -312,7 +313,7 @@ module Scrabble =
                     if not exists then
                         false
                     else
-                        aux (x + 1, y) 0
+                        aux (x, y + 1) 0
                 else
                     true
                     
@@ -326,6 +327,8 @@ module Scrabble =
     let validWordsAt (x,y) direction lettersHand (st : State.state) =
         let startWord = findStartWordDir (x,y) st.board direction
         let permutationsFromRack = makePermutations lettersHand
+        
+        printfn "Using startword %A\n" startWord
         
         List.fold
             (fun acc permutationHand ->
@@ -375,14 +378,48 @@ module Scrabble =
             //      if there is a character move to that one and try to make a word
             
            
-            System.Console.ReadLine() 
-            printfn "this is fuck %A\n" (validWordsAt (0,1) "horizontal" lettersHand st)
-            System.Console.ReadLine() 
+            // printfn "this is fuck horizontal %A\n" (validWordsAt (0,startMove.Length-1) "horizontal" lettersHand st)
             
             // let input =  System.Console.ReadLine()
-            // let move = RegEx.parseMove input
-            let horOrVer = if Map.isEmpty st.board then Direction.vertical else Direction.horizontal
-            let move = RegEx.parseMove (generateValidMoveForApiFromCharList startMove pos horOrVer) 
+            // let move = RegEx.parseMove inpt
+            
+            let move =
+                if Map.count st.board = 0 then
+                    let horOrVer = if Map.isEmpty st.board then Direction.horizontal else Direction.vertical
+                    let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList startMove pos horOrVer)
+                    
+                    printf "REGEX GENERATED MOVE START: %A\n" regexMove
+                    regexMove
+                else
+                    // let horOrVer = if direction = "horizontal" then st.board then Direction.horizontal else Direction.vertical
+                    Console.ReadLine()
+                    
+                    printfn("Please enter your x now: ")
+                    let x = Console.ReadLine() |> int
+                    
+                    printfn("Please enter your y now: ")
+                    let y = Console.ReadLine() |> int
+                    
+                    printfn("Please enter your direction now: ")
+                    let direction = Console.ReadLine()
+                    
+                    printf "This is the size of the Map: %A\n" Map.count
+           
+                    printfn "This is your hand: %A\n" lettersHand
+                    printfn "This is the coordinate of the end of the first word %A %A\n" (x, y) (Map.find (x, y) st.board)
+           
+                    let generatedMove = (validWordsAt (x,y) direction lettersHand st)[0][0][1..]
+                    printfn "This is the generated move %A\n" generatedMove
+                    
+                    printf "HIT CUSTOM MOVE!!!!\n"
+                    let test = generateValidMoveForApiFromCharList generatedMove (x,y + 1) Direction.vertical
+                    printfn "This is the string for the custom generated move: %A\n" test
+                    
+                    let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList generatedMove (x,y + 1) Direction.vertical)
+                    printf "REGEX GENERATED MOVE: %A\n" regexMove
+                    
+                    regexMove
+                
             
             debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
             send cstream (SMPlay move)
