@@ -201,11 +201,24 @@ module Scrabble =
                 aux xs (acc + (generateValidMoveForApiFromLetter x newCoord)) (offset + 1)
         aux move "" 0
         
-        
+    let computeOffset (x, y) pos direction =
+        if direction = Direction.horizontal then
+            (x+pos,y)
+        else
+            (x, y+pos)
+    let removeOverlappingLettersOnBoard word pos board dir =
+        word
+         |> List.mapi (fun i c -> computeOffset pos i dir,c)
+         |> List.filter (fun (coord,_) -> not (Map.containsKey coord board))
+       
+    let generateApiMoveFromCoordCharList lst =
+        ("", lst) ||> List.fold (fun acc (coord, c) ->
+            acc+generateValidMoveForApiFromLetter c coord)
     
     let getMoves letters state isStartMove =
         if isStartMove then
-            ((findAllWordsFromRack letters state) |> List.sortByDescending List.length)[0], (0,0) // No error handling here
+            let startmove, pos = ((findAllWordsFromRack letters state) |> List.sortByDescending List.length)[0], (0,0) // No error handling here
+            generateValidMoveForApiFromCharList startmove pos Direction.vertical
         else
             let wordInDict (word: char list) =
                 let word = word |> List.toArray |> String.Concat
@@ -213,11 +226,13 @@ module Scrabble =
             let ret = fbm Direction.horizontal state
             // let ret = fbm Direction.vertical state
             debugPrint (sprintf "%A\n" (ret)) 
-            let acc = ret |> List.filter (fun (_, word) -> wordInDict word)
+            let coord,acc = ret |> List.filter (fun (_, word) -> wordInDict word) |> List.head
             
+            let removedOverlapping = removeOverlappingLettersOnBoard acc coord state.board Direction.horizontal
+            generateApiMoveFromCoordCharList removedOverlapping
             
-            [], (0,0)
-            // acc,coords
+            // [], (0,0)
+            // acc,coord
             // let pos = southPoint state
             // let leftMoves = generateLeftSide state
             // let rightMoves = generateRightSide state
@@ -234,22 +249,20 @@ module Scrabble =
              
             let lettersHand = uintArrayToLetters (MultiSet.getKeys st.hand)
             
-            let startMove, pos = getMoves lettersHand st (Map.isEmpty st.board) // No error handling here
+            let startMove = getMoves lettersHand st (Map.isEmpty st.board) // No error handling here
             
             let horOrVer = if Map.isEmpty st.board then Direction.vertical else Direction.horizontal
             printfn "startmove: %A\n" (startMove)
-            printfn "%A\n" (generateValidMoveForApiFromCharList startMove pos horOrVer)
+            // printfn "%A\n" (generateValidMoveForApiFromCharList startMove pos horOrVer)
             
             forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
             
             printfn "%A" horOrVer
-            let move = RegEx.parseMove (generateValidMoveForApiFromCharList startMove pos horOrVer) 
+            // let move = RegEx.parseMove (generateValidMoveForApiFromCharList startMove pos horOrVer) 
+            let move = RegEx.parseMove startMove 
             
             debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
             send cstream (SMPlay move)
-            if counter > 2 then
-                while true do
-                    ()
                     
             let msg = recv cstream
             debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
