@@ -112,6 +112,16 @@ module internal Solver
                    else
                        elm :: acc
                )
+               
+    // let find_connected ((x,y): int*int) (board: Map<int*int, char*int>) =
+    //        let viable = [x,y+1;x,y-1;x+1,y;x-1,y]
+    //        ([],viable) ||>
+    //            List.fold (fun acc elm ->
+    //                if Map.containsKey elm board then
+    //                    elm :: acc
+    //                else
+    //                    acc
+    //            )
             
     let generate_moves (anchor: int*int) (dir: Direction) (state: state) =
         let ret = gen1 anchor 0 [] state [] dir

@@ -244,6 +244,136 @@ module Scrabble =
                 ret
             
             
+           
+    let findStartWordDir (x, y)  (board: Map<int*int,char*int>) direction =
+        let rec aux (x, y) dir (acc: char list) =
+            if Map.containsKey (x, y) board then
+                match dir with
+                | "horizontal" ->
+                    let c = fstTuple (Map.find (x, y) board)
+                    aux (x-1, y) dir (c :: acc)
+                | "vertical" ->
+                    let c = fstTuple (Map.find (x, y) board)
+                    aux (x, y-1) dir (c :: acc)
+            else
+                acc
+                    
+        aux (x,y) direction []
+        
+    let findEndWordDir (x, y)  (board: Map<int*int,char*int>) direction =
+        let rec aux (x, y) dir (acc: char list) =
+            if Map.containsKey (x, y) board then
+                match dir with
+                | "horizontal" ->
+                    let c = fstTuple (Map.find (x, y) board)
+                    aux (x+1, y) dir (c :: acc)
+                | "vertical" ->
+                    let c = fstTuple (Map.find (x, y) board)
+                    aux (x, y+1) dir (c :: acc)
+            else
+                acc
+                    
+        aux (x,y) direction [] |> List.rev
+     
+    let rec makePermutations rack =
+        let permutationCount = 2f ** (List.length rack |> float32) |> int
+        
+        let makePermutation letters funnyNumber =
+            let rec aux letters funnyNumber list =
+                match letters with
+                | [] -> list
+                | letter :: letters' ->
+                    let newList = if funnyNumber % 2 = 1 then letter :: list else list
+                    aux letters' (funnyNumber / 2) newList
+            aux (List.rev letters) funnyNumber []
+        
+        List.init permutationCount (makePermutation rack)
+   
+    let validate (x,y) direction (word: char list) (st : State.state) =
+        printfn "current word in validate is: %A\n" word
+        
+        let rec aux (x,y) offset =
+            if Map.containsKey (x,y) st.board then
+                match direction with
+                | "horizontal" ->
+                    let has_left = Map.containsKey (x , y - 1) st.board
+                    let has_right = Map.containsKey (x , y + 1) st.board
+                   
+                    printfn "has_left %A : has_right %A\n"  has_left has_right
+                    
+                    let sw =
+                        if Map.containsKey (x, y) st.board then
+                            if has_left then
+                                printfn "Has left entered\n"
+                                let c,_ = Map.find (x, y) st.board
+                                // (findStartWordDir(x, y-1) st.board "vertical") @ (c :: findEndWordDir (x, y + 1) st.board "vertical")
+                                word @ (c :: findEndWordDir (x, y + 1) st.board "vertical")
+                            else if has_right then
+                                printfn "Has right entered\n"
+                                let c,_ = Map.find (x, y) st.board
+                                c :: findEndWordDir (x, y + 1) st.board "vertical"
+                            else
+                                []
+                        else
+                            []
+                            
+                    let newWord = sw |> Array.ofList |> String.Concat
+                    printfn "newWord %A\n" newWord
+                    
+                    let exists = Dictionary.lookup newWord st.dict
+                    printfn "exists %A\n" exists
+                    
+                    if not exists then
+                        false
+                    else
+                        aux (x + 1, y) 0
+                | "vertical" ->
+                    let has_left = Map.containsKey (x - 1, y) st.board
+                    let has_right = Map.containsKey (x + 1, y) st.board
+                    
+                    let sw =
+                        if has_left then
+                            let c,_ = Map.find (x, y) st.board
+                            //(findStartWordDir(x-1, y) st.board "horizontal") @ (c :: findEndWordDir (x + 1, y) st.board "horizontal")
+                            word @ (c :: findEndWordDir (x, y + 1) st.board "vertical")
+                        else if has_right then
+                            let c,_ = Map.find (x, y) st.board
+                            c :: findEndWordDir (x + 1, y) st.board "horizontal"
+                        else
+                            []
+                            
+                    let newWord = sw |> Array.ofList |> String.Concat
+                    let exists = Dictionary.lookup newWord st.dict
+                    
+                    if not exists then
+                        false
+                    else
+                        aux (x, y + 1) 0
+                else
+                    true
+                    
+        if Map.containsKey (x,y) st.board then
+            aux (x,y) 0
+        else
+            false
+             
+        
+    let validWordsAt (x,y) direction lettersHand (st : State.state) =
+        let startWord = findStartWordDir (x,y) st.board direction
+        let permutationsFromRack = makePermutations lettersHand
+        
+        printfn "Using startword %A\n" startWord
+        
+        (List.fold
+            (fun acc permutationHand ->
+                let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st)
+                if currentWord <> [] && (validate (x,y) direction currentWord[0] st)
+                then currentWord :: acc
+                else acc
+            )
+            []
+            permutationsFromRack, startWord)
+
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
         let rec aux (st : State.state) counter=
             Print.printHand pieces (State.hand st)
@@ -266,6 +396,64 @@ module Scrabble =
                 
                 debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
                 send cstream (SMPlay move)
+            forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
+            
+            // let input =  System.Console.ReadLine()
+            // let move = RegEx.parseMove inpt
+            
+            // let move =
+            //     if Map.count st.board = 0 then
+            //         let horOrVer = if Map.isEmpty st.board then Direction.horizontal else Direction.vertical
+            //         let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList startMove pos horOrVer)
+                    
+            //         printf "REGEX GENERATED MOVE START: %A\n" regexMove
+            //         regexMove
+            //     else
+            //         printfn "This is your hand: %A\n" lettersHand
+                    
+            //         Console.ReadLine()
+                    
+            //         printfn("Please enter your x now: ")
+            //         let x = Console.ReadLine() |> int
+                    
+            //         printfn("Please enter your y now: ")
+            //         let y = Console.ReadLine() |> int
+                    
+            //         printfn("Please enter your direction now: ")
+            //         let direction = Console.ReadLine()
+                    
+            //         let actualDirection =
+            //             if direction = "vertical" then
+            //                 Direction.vertical
+            //             else
+            //                 Direction.horizontal
+                           
+            //         let move, startWord = (validWordsAt (x,y) direction lettersHand st)// [0][0][1..]
+            //         let knownSize = List.length startWord
+                    
+            //         let generatedMove = move[0][0][knownSize..]
+                    
+            //         let regexMove =
+            //             match actualDirection with
+            //             | Direction.horizontal ->
+            //                 let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList generatedMove (x + 1, y) actualDirection)
+                            
+            //                 regexMove
+            //             | Direction.vertical ->
+            //                 let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList generatedMove (x, y + 1) actualDirection)
+                            
+            //                 regexMove
+                    
+            //         printf "REGEX GENERATED MOVE: %A\n" regexMove
+                    
+            //         regexMove
+                
+            
+            // debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
+            // send cstream (SMPlay move)
+            // if counter > 2 then
+            //     while true do
+            //         ()
                     
             let msg = recv cstream
             // debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
