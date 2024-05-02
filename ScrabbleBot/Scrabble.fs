@@ -263,7 +263,7 @@ module Scrabble =
         
         List.init permutationCount (makePermutation rack)
    
-    let validate (x,y) direction (word: char list) (startWord: char list) (st : State.state) =
+    let validate pos direction (word: char list) (startWord: char list) (st : State.state) =
         let wordLength = List.length word
         
         let rec aux (x,y) acc bool =
@@ -299,8 +299,9 @@ module Scrabble =
                     else
                         aux (x,y+1) (acc+1) false
         
-        if Map.containsKey (x,y) st.board && word.Length > startWord.Length then
+        if Map.containsKey pos st.board && word.Length > startWord.Length then
             // printfn "Calling aux"
+            let x,y = pos
             match direction with
             | "horizontal" ->
                 aux (x+1,y) 0 true
@@ -310,8 +311,8 @@ module Scrabble =
             false
              
         
-    let validWordsAt (x,y) direction lettersHand (st : State.state) =
-        let startWord = findStartWordDir (x,y) st.board direction
+    let validWordsAt pos direction lettersHand (st : State.state) =
+        let startWord = findStartWordDir pos st.board direction
         let permutationsFromRack = makePermutations lettersHand
         
         // printfn "Using startword %A\n" startWord
@@ -320,24 +321,29 @@ module Scrabble =
             (fun acc permutationHand ->
                 let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st) |> List.sortBy List.length
                 // printfn "current word is %A\n" currentWord
-                if currentWord <> [] && (validate (x,y) direction currentWord[(List.length currentWord)-1] startWord st)
-                then currentWord :: acc
+                let isValid = if (List.length currentWord)-1 >= 0 then validate pos direction currentWord[(List.length currentWord)-1] startWord st else false
+                if currentWord <> [] && isValid
+                then (currentWord, pos, direction) :: acc
                 else acc
-            )
-            []
-            permutationsFromRack, startWord)
+            ) [] permutationsFromRack, startWord)
 
 
-    let longestStrings tuple =
-        let longestStringInList lst =
-            match lst with
-            | [] -> []
-            | xs -> xs |> List.maxBy (fun str -> str.Length)
+    let longestStrings (tuple: (char list list * (int*int)*string) list list) =
+        let longestStringInList (lst: char list list * (int*int) * string) =
+            let lst, c, dir = lst
+            let ret = 
+                match lst with
+                | [] -> []
+                | xs -> xs |> List.maxBy _.Length
+            ret, c, dir
     
-        let longestStringInInnerList innerList =
+        let longestStringInInnerList (innerList: (char list list * (int*int) * string) list)=
             match innerList with
-            | [] -> []
-            | xs -> xs |> List.map longestStringInList |> List.maxBy (fun str -> str.Length)
+            | [] -> [], (0,0), "horizontal"
+            | xs ->
+                xs
+                |> List.map longestStringInList
+                |> List.maxBy (fun (cLst, coords, dir) -> cLst.Length)
     
         tuple |> List.map longestStringInInnerList 
     
@@ -354,9 +360,10 @@ module Scrabble =
                 if Map.containsKey(x', y'+1) st.board or Map.containsKey(x'+1, y') st.board then
                     auxVert xs acc
                 else
-                    auxVert xs ((fstTuple (validWordsAt x "vertical" lettersHand st) @ acc))
+                    let validWords = fstTuple (validWordsAt x "vertical" lettersHand st)
+                    auxVert xs (validWords @ acc)
             
-        let rec auxHori moves (acc: char list list list) = 
+        let rec auxHori moves acc = 
             match moves with
             | [] -> acc
             | x :: xs ->
@@ -366,7 +373,8 @@ module Scrabble =
                 if Map.containsKey(x', y'+1) st.board or Map.containsKey(x'+1, y') st.board then
                     auxHori xs acc
                 else
-                    auxHori xs ((fstTuple (validWordsAt x "horizontal" lettersHand st)) @ acc)
+                    let validWords = fstTuple (validWordsAt x "horizontal" lettersHand st)
+                    auxHori xs (validWords @ acc)
                 
         (auxHori mv []) @ (auxVert mv [])
         
@@ -396,39 +404,40 @@ module Scrabble =
                     printfn "This is your hand: %A\n" lettersHand
                     
                     // printfn "this is all the moves: %A\n" (generateAllMoves lettersHand st)
-                    Console.ReadLine()
+                    // Console.ReadLine()
                     
                     let moves = generateAllMoves lettersHand st
                     printfn "Moves: %A\n" moves
                     
-                    let generatedMove = (longestStrings (moves :: []))[0]
-                    printfn "Generated move from all moves: %A\n" generatedMove
+                    let longestString,coord,direction = (longestStrings (moves :: []))[0]
+                    printfn "Generated move from all moves: %A\n" longestString
                     
-                    Console.ReadLine()
+                    // Console.ReadLine()
                     
-                    printfn("Please enter your x now: ")
-                    let x = Console.ReadLine() |> int
-                    
-                    printfn("Please enter your y now: ")
-                    let y = Console.ReadLine() |> int
-                    
-                    printfn("Please enter your direction now: ")
-                    let direction = Console.ReadLine()
-                    
+                    // printfn("Please enter your x now: ")
+                    // let x = Console.ReadLine() |> int
+                    //
+                    // printfn("Please enter your y now: ")
+                    // let y = Console.ReadLine() |> int
+                    //
+                    // printfn("Please enter your direction now: ")
+                    // let direction = Console.ReadLine()
+                    //
                     let actualDirection =
                         if direction = "vertical" then
                             Direction.vertical
                         else
                             Direction.horizontal
                            
-                    let moves, startWord = (validWordsAt (x,y) direction lettersHand st)
+                    let moves, startWord = (validWordsAt coord direction lettersHand st)
                     let knownSize = List.length startWord
                    
                     printfn "Moves: %A\n" moves
-                    let generatedMove = (longestStrings (moves :: []))[0][knownSize..]
+                    // let longestString, coord, dir = (longestStrings (moves :: []))[0]
+                    let generatedMove = longestString[knownSize..]
                     printfn "Generated move: %A\n" generatedMove
-                    
-                        
+                    printfn "Coords: %A" coord
+                    let x,y = coord
                     let regexMove =
                         match actualDirection with
                         | Direction.horizontal ->
