@@ -1,6 +1,7 @@
 ﻿namespace YourClientName
 
 open System
+open System.Net.Security
 open System.Reflection
 open Parser
 open ScrabbleUtil
@@ -263,25 +264,49 @@ module Scrabble =
         List.init permutationCount (makePermutation rack)
    
     let validate (x,y) direction (word: char list) (startWord: char list) (st : State.state) =
-        printfn "Current word in validate is: %A %A\n" word (x,y)
+        let wordLength = List.length word
         
-        let rec aux (x,y) acc =
-            if Map.containsKey (x,y) st.board then
+        let rec aux (x,y) acc bool =
+            // printfn "aux with %A\n" bool
+            let acc =
+                if bool = false then
+                    wordLength - 1
+                else
+                    acc
+                
+            match acc with
+            | acc when acc = (wordLength - 1) -> bool
+            | _ ->
                 match direction with
                 | "horizontal" ->
-                    true
+                    let leftOp = Map.containsKey(x,y-1) st.board
+                    let rightOp = Map.containsKey(x,y+1) st.board
+                    
+                    let afterOp = Map.containsKey(x,y+1) st.board
+                    
+                    if not leftOp && not rightOp && not afterOp then
+                        aux (x+1,y) (acc+1) true
+                    else
+                        aux (x+1,y) (acc+1) false
                 | "vertical" ->
-                    true
-            else
-                true
-        
-        printfn "This is (%A, %A)" x y
+                    let leftOp = Map.containsKey(x-1,y) st.board
+                    let rightOp = Map.containsKey(x+1,y) st.board
+                    
+                    let afterOp = Map.containsKey(x,y+1) st.board
+                    
+                    if not leftOp && not rightOp && not afterOp then
+                        aux (x,y+1) (acc+1) true
+                    else
+                        aux (x,y+1) (acc+1) false
         
         if Map.containsKey (x,y) st.board && word.Length > startWord.Length then
-            printfn "Calling aux"
-            aux (x,y) true
+            // printfn "Calling aux"
+            match direction with
+            | "horizontal" ->
+                aux (x+1,y) 0 true
+            | "vertical" ->
+                aux (x,y+1) 0 true
         else
-            printfn "returning false"
             false
              
         
@@ -289,12 +314,12 @@ module Scrabble =
         let startWord = findStartWordDir (x,y) st.board direction
         let permutationsFromRack = makePermutations lettersHand
         
-        printfn "Using startword %A\n" startWord
+        // printfn "Using startword %A\n" startWord
         
         (List.fold
             (fun acc permutationHand ->
                 let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st) |> List.sortBy List.length
-                printfn "current word is %A\n" currentWord
+                // printfn "current word is %A\n" currentWord
                 if currentWord <> [] && (validate (x,y) direction currentWord[(List.length currentWord)-1] startWord st)
                 then currentWord :: acc
                 else acc
@@ -315,6 +340,36 @@ module Scrabble =
             | xs -> xs |> List.map longestStringInList |> List.maxBy (fun str -> str.Length)
     
         tuple |> List.map longestStringInInnerList 
+    
+    let generateAllMoves lettersHand (st : State.state) =
+        let mv = st.board |> Map.fold (fun keys key _ -> key :: keys) []
+        
+        let rec auxVert moves acc = 
+            match moves with
+            | [] -> acc
+            | x :: xs -> 
+                let x' = fstTuple x
+                let y' = sndTuple x
+                
+                if Map.containsKey(x', y'+1) st.board or Map.containsKey(x'+1, y') st.board then
+                    auxVert xs acc
+                else
+                    auxVert xs ((fstTuple (validWordsAt x "vertical" lettersHand st) @ acc))
+            
+        let rec auxHori moves (acc: char list list list) = 
+            match moves with
+            | [] -> acc
+            | x :: xs ->
+                let x' = fstTuple x
+                let y' = sndTuple x
+                
+                if Map.containsKey(x', y'+1) st.board or Map.containsKey(x'+1, y') st.board then
+                    auxHori xs acc
+                else
+                    auxHori xs ((fstTuple (validWordsAt x "horizontal" lettersHand st)) @ acc)
+                
+        (auxHori mv []) @ (auxVert mv [])
+        
     
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
         let rec aux (st : State.state) counter=
@@ -339,6 +394,15 @@ module Scrabble =
                     regexMove
                 else
                     printfn "This is your hand: %A\n" lettersHand
+                    
+                    // printfn "this is all the moves: %A\n" (generateAllMoves lettersHand st)
+                    Console.ReadLine()
+                    
+                    let moves = generateAllMoves lettersHand st
+                    printfn "Moves: %A\n" moves
+                    
+                    let generatedMove = (longestStrings (moves :: []))[0]
+                    printfn "Generated move from all moves: %A\n" generatedMove
                     
                     Console.ReadLine()
                     
