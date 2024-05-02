@@ -12,6 +12,7 @@ open System.Linq
 open System.Threading
 
 open ScrabbleUtil.DebugPrint
+open Solver
 
 // The RegEx module is only used to parse human input. It is not used for the final product.
 module RegEx =
@@ -223,10 +224,10 @@ module Scrabble =
         let rec aux (x, y) dir (acc: char list) =
             if Map.containsKey (x, y) board then
                 match dir with
-                | "horizontal" ->
+                | Direction.horizontal ->
                     let c = fstTuple (Map.find (x, y) board)
                     aux (x-1, y) dir (c :: acc)
-                | "vertical" ->
+                | Direction.vertical ->
                     let c = fstTuple (Map.find (x, y) board)
                     aux (x, y-1) dir (c :: acc)
             else
@@ -238,10 +239,10 @@ module Scrabble =
         let rec aux (x, y) dir (acc: char list) =
             if Map.containsKey (x, y) board then
                 match dir with
-                | "horizontal" ->
+                | Direction.horizontal ->
                     let c = fstTuple (Map.find (x, y) board)
                     aux (x+1, y) dir (c :: acc)
-                | "vertical" ->
+                | Direction.vertical ->
                     let c = fstTuple (Map.find (x, y) board)
                     aux (x, y+1) dir (c :: acc)
             else
@@ -263,50 +264,35 @@ module Scrabble =
         
         List.init permutationCount (makePermutation rack)
    
+    let computeOffset (x,y) offset dir =
+        if dir = Direction.horizontal then
+            (x,y+offset)
+        else
+            (x+offset,y)
+    let otherDir dir = if dir = Direction.horizontal then Direction.vertical else Direction.horizontal
     let validate pos direction (word: char list) (startWord: char list) (st : State.state) =
-        let wordLength = List.length word
+        let wordLength = List.length word - 1
+        let startWordLength = List.length startWord - 1
         
         let rec aux (x,y) acc bool =
             // printfn "aux with %A\n" bool
-            let acc =
-                if bool = false then
-                    wordLength - 1
-                else
-                    acc
-                
-            match acc with
-            | acc when acc = (wordLength - 1) -> bool
-            | _ ->
-                match direction with
-                | "horizontal" ->
-                    let leftOp = Map.containsKey(x,y-1) st.board
-                    let rightOp = Map.containsKey(x,y+1) st.board
-                    
-                    let afterOp = Map.containsKey(x,y+1) st.board
-                    
-                    if not leftOp && not rightOp && not afterOp then
-                        aux (x+1,y) (acc+1) true
-                    else
-                        aux (x+1,y) (acc+1) false
-                | "vertical" ->
-                    let leftOp = Map.containsKey(x-1,y) st.board
-                    let rightOp = Map.containsKey(x+1,y) st.board
-                    
-                    let afterOp = Map.containsKey(x,y+1) st.board
-                    
-                    if not leftOp && not rightOp && not afterOp then
-                        aux (x,y+1) (acc+1) true
-                    else
-                        aux (x,y+1) (acc+1) false
+            let leftCoord = computeOffset (x,y) -1 direction
+            let rightCoord = computeOffset (x,y) 1 direction
+            let leftOp = Map.containsKey leftCoord st.board
+            let rightOp = Map.containsKey rightCoord st.board
+            let afterOp = Map.containsKey(x,y+1) st.board
         
-        if Map.containsKey pos st.board && word.Length > startWord.Length then
-            // printfn "Calling aux"
-            let x,y = pos
-            match direction with
-            | "horizontal" ->
-                aux (x+1,y) 0 true
-            | "vertical" ->
-                aux (x,y+1) 0 true
+            let newCoord = computeOffset (x,y) 1 (otherDir direction)
+            
+            let noLettersAround = not leftOp && not rightOp && not afterOp
+            match acc with
+            | _ when not bool -> false
+            | acc when acc = wordLength -> true
+            | _ -> aux newCoord (acc+1) noLettersAround
+        
+        if Map.containsKey pos st.board && wordLength > startWordLength then
+            let newCoord = computeOffset pos 1 (otherDir direction)
+            aux newCoord 0 true
         else
             false
              
@@ -317,19 +303,22 @@ module Scrabble =
         
         // printfn "Using startword %A\n" startWord
         
-        (List.fold
-            (fun acc permutationHand ->
+        ([], permutationsFromRack)
+        ||> (List.fold (fun acc permutationHand ->
                 let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st) |> List.sortBy List.length
                 // printfn "current word is %A\n" currentWord
-                let isValid = if (List.length currentWord)-1 >= 0 then validate pos direction currentWord[(List.length currentWord)-1] startWord st else false
+                let isValid =
+                    if (List.length currentWord)-1 >= 0 then
+                        validate pos direction currentWord[(List.length currentWord)-1] startWord st
+                    else false
                 if currentWord <> [] && isValid
                 then (currentWord, pos, direction) :: acc
                 else acc
-            ) [] permutationsFromRack, startWord)
+            )), startWord
 
 
-    let longestStrings (tuple: (char list list * (int*int)*string) list list) =
-        let longestStringInList (lst: char list list * (int*int) * string) =
+    let longestStrings (tuple: (char list list * (int*int)*Direction) list list) =
+        let longestStringInList (lst: char list list * (int*int) * Direction) =
             let lst, c, dir = lst
             let ret = 
                 match lst with
@@ -337,13 +326,13 @@ module Scrabble =
                 | xs -> xs |> List.maxBy _.Length
             ret, c, dir
     
-        let longestStringInInnerList (innerList: (char list list * (int*int) * string) list)=
+        let longestStringInInnerList (innerList: (char list list * (int*int) * Direction) list)=
             match innerList with
-            | [] -> [], (0,0), "horizontal"
+            | [] -> [], (0,0), Direction.horizontal
             | xs ->
                 xs
                 |> List.map longestStringInList
-                |> List.maxBy (fun (cLst, coords, dir) -> cLst.Length)
+                |> List.maxBy (fun (cLst, _, _) -> cLst.Length)
     
         tuple |> List.map longestStringInInnerList 
     
@@ -360,7 +349,7 @@ module Scrabble =
                 if Map.containsKey(x', y'+1) st.board or Map.containsKey(x'+1, y') st.board then
                     auxVert xs acc
                 else
-                    let validWords = fstTuple (validWordsAt x "vertical" lettersHand st)
+                    let validWords = fstTuple (validWordsAt x Direction.vertical lettersHand st)
                     auxVert xs (validWords @ acc)
             
         let rec auxHori moves acc = 
@@ -373,7 +362,7 @@ module Scrabble =
                 if Map.containsKey(x', y'+1) st.board or Map.containsKey(x'+1, y') st.board then
                     auxHori xs acc
                 else
-                    let validWords = fstTuple (validWordsAt x "horizontal" lettersHand st)
+                    let validWords = fstTuple (validWordsAt x Direction.horizontal lettersHand st)
                     auxHori xs (validWords @ acc)
                 
         (auxHori mv []) @ (auxVert mv [])
@@ -413,18 +402,9 @@ module Scrabble =
                     printfn "Generated move from all moves: %A\n" longestString
                     
                     // Console.ReadLine()
-                    
-                    // printfn("Please enter your x now: ")
-                    // let x = Console.ReadLine() |> int
-                    //
-                    // printfn("Please enter your y now: ")
-                    // let y = Console.ReadLine() |> int
-                    //
-                    // printfn("Please enter your direction now: ")
-                    // let direction = Console.ReadLine()
-                    //
+                   
                     let actualDirection =
-                        if direction = "vertical" then
+                        if direction = Direction.vertical then
                             Direction.vertical
                         else
                             Direction.horizontal
@@ -433,7 +413,6 @@ module Scrabble =
                     let knownSize = List.length startWord
                    
                     printfn "Moves: %A\n" moves
-                    // let longestString, coord, dir = (longestStrings (moves :: []))[0]
                     let generatedMove = longestString[knownSize..]
                     printfn "Generated move: %A\n" generatedMove
                     printfn "Coords: %A" coord
