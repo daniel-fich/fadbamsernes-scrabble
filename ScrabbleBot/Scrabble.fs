@@ -11,6 +11,7 @@ open System.Linq
 open System.Threading
 
 open ScrabbleUtil.DebugPrint
+open State
 
 // The RegEx module is only used to parse human input. It is not used for the final product.
 module RegEx =
@@ -206,10 +207,22 @@ module Scrabble =
             (x+pos,y)
         else
             (x, y+pos)
-    let removeOverlappingLettersOnBoard word pos board dir =
-        word
-         |> List.mapi (fun i c -> computeOffset pos i dir,c)
-         |> List.filter (fun (coord,_) -> not (Map.containsKey coord board))
+    let removeOverlappingLettersOnBoardAndValidate word pos (state: state) dir =
+        let charsWithPos = word |> List.mapi (fun i c -> computeOffset pos i dir,c)
+                // |> List.filter (fun (coord,_) -> not (Map.containsKey coord board))
+        let reBuildFromBoard = ("", charsWithPos) ||> List.fold (fun acc (coords, c) ->
+            let c = 
+                if Map.containsKey coords state.board then
+                    let c,_ = Map.find coords state.board
+                    c
+                else
+                    c
+            acc+(Char.ToString c))
+        if Dictionary.lookup reBuildFromBoard state.dict then
+            Some(charsWithPos |> List.filter (fun (coord,_) -> not (Map.containsKey coord state.board)))
+        else
+            None
+        
        
     let generateApiMoveFromCoordCharList lst =
         ("", lst) ||> List.fold (fun acc (coord, c) ->
@@ -220,15 +233,15 @@ module Scrabble =
             let startmove, pos = ((findAllWordsFromRack letters state) |> List.sortByDescending List.length)[0], (0,0) // No error handling here
             generateValidMoveForApiFromCharList startmove pos Direction.vertical
         else
-            let wordInDict (word: char list) =
-                let word = word |> List.toArray |> String.Concat
-                Dictionary.lookup word state.dict
             let ret = fbm Direction.horizontal state @ fbm Direction.vertical state
-            let coord,acc,dir = ret |> List.filter (fun (_, word,_) -> wordInDict word) |> List.sortByDescending (fun (_, s,_) -> s.Length) |> List.head
+            let overlappingRemovedAndPlaysValidated = ret |> List.sortByDescending (fun (_, s,_) -> s.Length) |> List.map (fun (coord,acc,dir) ->
+                removeOverlappingLettersOnBoardAndValidate acc coord state dir) |> List.filter Option.isSome |> List.map Option.get
             
-            let removedOverlapping = removeOverlappingLettersOnBoard acc coord state.board dir 
-            let ret = generateApiMoveFromCoordCharList removedOverlapping
-            ret
+            if List.isEmpty overlappingRemovedAndPlaysValidated then
+                ""
+            else 
+                let ret = generateApiMoveFromCoordCharList (overlappingRemovedAndPlaysValidated |> List.head)
+                ret
             
             
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
@@ -240,21 +253,22 @@ module Scrabble =
             
             let startMove = getMoves lettersHand st (Map.isEmpty st.board) // No error handling here
             
-            let horOrVer = if Map.isEmpty st.board then Direction.vertical else Direction.horizontal
-            printfn "startmove: %A\n" (startMove)
-            // printfn "%A\n" (generateValidMoveForApiFromCharList startMove pos horOrVer)
-            
-            forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
-            
-            printfn "%A" horOrVer
-            // let move = RegEx.parseMove (generateValidMoveForApiFromCharList startMove pos horOrVer) 
-            let move = RegEx.parseMove startMove 
-            
-            debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
-            send cstream (SMPlay move)
+            if String.IsNullOrWhiteSpace startMove then
+                send cstream SMPass
+            else
+                let horOrVer = if Map.isEmpty st.board then Direction.vertical else Direction.horizontal
+                printfn "startmove: %A\n" (startMove)
+                
+                forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the     last inputs)\n\n"
+                
+                printfn "%A" horOrVer
+                let move = RegEx.parseMove startMove 
+                
+                debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
+                send cstream (SMPlay move)
                     
             let msg = recv cstream
-            debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
+            // debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
 
             match msg with
             | RCM (CMPlaySuccess(ms, points, newPieces)) ->

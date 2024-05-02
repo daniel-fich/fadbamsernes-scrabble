@@ -2,6 +2,7 @@ module internal Solver
 
     open System
     open MultiSet
+    open ScrabbleUtil
     open ScrabbleUtil.Dictionary
     open State
 
@@ -115,7 +116,7 @@ module internal Solver
     let generate_moves (anchor: int*int) (dir: Direction) (state: state) =
         let ret = gen1 anchor 0 [] state [] dir
         (((0,0),[]), ret) ||> List.fold (fun acc (coords, word) ->
-            if List.length word > List.length (snd acc) then
+            if lookup (String.Concat word) state.dict then
                 coords, word
             else acc)
             
