@@ -262,72 +262,26 @@ module Scrabble =
         
         List.init permutationCount (makePermutation rack)
    
-    let validate (x,y) direction (word: char list) (st : State.state) =
-        printfn "current word in validate is: %A\n" word
+    let validate (x,y) direction (word: char list) (startWord: char list) (st : State.state) =
+        printfn "Current word in validate is: %A %A\n" word (x,y)
         
-        let rec aux (x,y) offset =
+        let rec aux (x,y) acc =
             if Map.containsKey (x,y) st.board then
                 match direction with
                 | "horizontal" ->
-                    let has_left = Map.containsKey (x , y - 1) st.board
-                    let has_right = Map.containsKey (x , y + 1) st.board
-                   
-                    printfn "has_left %A : has_right %A\n"  has_left has_right
-                    
-                    let sw =
-                        if Map.containsKey (x, y) st.board then
-                            if has_left then
-                                printfn "Has left entered\n"
-                                let c,_ = Map.find (x, y) st.board
-                                // (findStartWordDir(x, y-1) st.board "vertical") @ (c :: findEndWordDir (x, y + 1) st.board "vertical")
-                                word @ (c :: findEndWordDir (x, y + 1) st.board "vertical")
-                            else if has_right then
-                                printfn "Has right entered\n"
-                                let c,_ = Map.find (x, y) st.board
-                                c :: findEndWordDir (x, y + 1) st.board "vertical"
-                            else
-                                []
-                        else
-                            []
-                            
-                    let newWord = sw |> Array.ofList |> String.Concat
-                    printfn "newWord %A\n" newWord
-                    
-                    let exists = Dictionary.lookup newWord st.dict
-                    printfn "exists %A\n" exists
-                    
-                    if not exists then
-                        false
-                    else
-                        aux (x + 1, y) 0
-                | "vertical" ->
-                    let has_left = Map.containsKey (x - 1, y) st.board
-                    let has_right = Map.containsKey (x + 1, y) st.board
-                    
-                    let sw =
-                        if has_left then
-                            let c,_ = Map.find (x, y) st.board
-                            //(findStartWordDir(x-1, y) st.board "horizontal") @ (c :: findEndWordDir (x + 1, y) st.board "horizontal")
-                            word @ (c :: findEndWordDir (x, y + 1) st.board "vertical")
-                        else if has_right then
-                            let c,_ = Map.find (x, y) st.board
-                            c :: findEndWordDir (x + 1, y) st.board "horizontal"
-                        else
-                            []
-                            
-                    let newWord = sw |> Array.ofList |> String.Concat
-                    let exists = Dictionary.lookup newWord st.dict
-                    
-                    if not exists then
-                        false
-                    else
-                        aux (x, y + 1) 0
-                else
                     true
-                    
-        if Map.containsKey (x,y) st.board then
-            aux (x,y) 0
+                | "vertical" ->
+                    true
+            else
+                true
+        
+        printfn "This is (%A, %A)" x y
+        
+        if Map.containsKey (x,y) st.board && word.Length > startWord.Length then
+            printfn "Calling aux"
+            aux (x,y) true
         else
+            printfn "returning false"
             false
              
         
@@ -339,14 +293,29 @@ module Scrabble =
         
         (List.fold
             (fun acc permutationHand ->
-                let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st)
-                if currentWord <> [] && (validate (x,y) direction currentWord[0] st)
+                let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st) |> List.sortBy List.length
+                printfn "current word is %A\n" currentWord
+                if currentWord <> [] && (validate (x,y) direction currentWord[(List.length currentWord)-1] startWord st)
                 then currentWord :: acc
                 else acc
             )
             []
             permutationsFromRack, startWord)
 
+
+    let longestStrings tuple =
+        let longestStringInList lst =
+            match lst with
+            | [] -> []
+            | xs -> xs |> List.maxBy (fun str -> str.Length)
+    
+        let longestStringInInnerList innerList =
+            match innerList with
+            | [] -> []
+            | xs -> xs |> List.map longestStringInList |> List.maxBy (fun str -> str.Length)
+    
+        tuple |> List.map longestStringInInnerList 
+    
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
         let rec aux (st : State.state) counter=
             Print.printHand pieces (State.hand st)
@@ -388,11 +357,14 @@ module Scrabble =
                         else
                             Direction.horizontal
                            
-                    let move, startWord = (validWordsAt (x,y) direction lettersHand st)// [0][0][1..]
+                    let moves, startWord = (validWordsAt (x,y) direction lettersHand st)
                     let knownSize = List.length startWord
+                   
+                    printfn "Moves: %A\n" moves
+                    let generatedMove = (longestStrings (moves :: []))[0][knownSize..]
+                    printfn "Generated move: %A\n" generatedMove
                     
-                    let generatedMove = move[0][0][knownSize..]
-                    
+                        
                     let regexMove =
                         match actualDirection with
                         | Direction.horizontal ->
@@ -411,7 +383,7 @@ module Scrabble =
             
             debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
             send cstream (SMPlay move)
-            if counter > 2 then
+            if counter > 200_000 then
                 while true do
                     ()
                     
