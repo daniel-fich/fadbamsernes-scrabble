@@ -11,6 +11,7 @@ open System.Linq
 open System.Threading
 
 open ScrabbleUtil.DebugPrint
+open Solver
 open State
 
 // The RegEx module is only used to parse human input. It is not used for the final product.
@@ -207,73 +208,104 @@ module Scrabble =
             (x+pos,y)
         else
             (x, y+pos)
-    let removeOverlappingLettersOnBoardAndValidate word pos (state: state) dir =
-        let charsWithPos = word |> List.mapi (fun i c -> computeOffset pos i dir,c)
-                // |> List.filter (fun (coord,_) -> not (Map.containsKey coord board))
-        let reBuildFromBoard = ("", charsWithPos) ||> List.fold (fun acc (coords, c) ->
-            let c = 
-                if Map.containsKey coords state.board then
-                    let c,_ = Map.find coords state.board
-                    c
+    
+            
+           
+    let findStartWordDir pos (board: Map<int*int,char*int>) (direction: Direction) =
+        let rec aux (x, y) prev dir (acc: char list) =
+            if Map.containsKey (x, y) board then
+                match dir with
+                | Direction.horizontal ->
+                    let c = fstTuple (Map.find (x, y) board)
+                    aux (x-1, y) (x,y) dir (c :: acc)
+                | Direction.vertical ->
+                    let c = fstTuple (Map.find (x, y) board)
+                    aux (x, y-1) (x,y) dir (c :: acc)
+            else
+                prev,acc
+                    
+        aux pos pos direction []
+        
+    let findEndWordDir pos  (board: Map<int*int,char*int>) direction =
+        let rec aux (x, y) prev dir (acc: char list) =
+            if Map.containsKey (x, y) board then
+                match dir with
+                | Direction.horizontal ->
+                    let c = fstTuple (Map.find (x, y) board)
+                    aux (x+1, y) (x, y) dir (c :: acc)
+                | Direction.vertical ->
+                    let c = fstTuple (Map.find (x, y) board)
+                    aux (x, y+1) (x, y) dir (c :: acc)
+            else
+                prev, acc
+                    
+        let coords, wrd = aux pos pos direction []
+        coords, wrd |> List.rev
+    
+    let otherDirection dir = if dir = Direction.horizontal then Direction.vertical else Direction.horizontal
+    
+    let toCharListWithCoords word pos dir =
+        word |> List.mapi (fun i c -> computeOffset pos i dir,c)
+    let reBuildFromBoard charsWithPos state =
+        ("", charsWithPos) ||> List.fold (fun acc (coords, c) ->
+        let c = 
+            if Map.containsKey coords state.board then
+                Map.find coords state.board |> fstTuple
+            else
+                c
+        acc+(Char.ToString c))
+    let rec removeOverlappingLettersOnBoardAndValidate word pos (state: state) dir =
+        let charsWithPos = toCharListWithCoords word pos dir
+        let boardString = reBuildFromBoard charsWithPos state 
+        let crossDir = otherDirection dir
+        let crossDirectionValid = (true, charsWithPos) ||> List.fold (fun acc (coords, c) ->
+                let strt,start = findStartWordDir coords state.board crossDir
+                let _,endWrd = findEndWordDir coords state.board crossDir
+                if start |> (@) endWrd |> List.length > 1 then
+                    let charsWithPos = toCharListWithCoords (start @ endWrd) strt crossDir
+                    let boardString = reBuildFromBoard charsWithPos state
+                    acc && Dictionary.lookup boardString state.dict
                 else
-                    c
-            acc+(Char.ToString c))
-        if Dictionary.lookup reBuildFromBoard state.dict then
+                    acc && true) 
+        let crossDirectionValid = crossDirectionValid || true
+        if Dictionary.lookup boardString state.dict && crossDirectionValid then
             Some(charsWithPos |> List.filter (fun (coord,_) -> not (Map.containsKey coord state.board)))
         else
             None
-        
-       
+            
+           
     let generateApiMoveFromCoordCharList lst =
         ("", lst) ||> List.fold (fun acc (coord, c) ->
             acc+generateValidMoveForApiFromLetter c coord)
     
-    let getMoves letters state isStartMove =
+    let getMoves letters state isStartMove banned =
         if isStartMove then
             let startmove, pos = ((findAllWordsFromRack letters state) |> List.sortByDescending List.length)[0], (0,0) // No error handling here
             generateValidMoveForApiFromCharList startmove pos Direction.vertical
         else
             let ret = fbm Direction.horizontal state @ fbm Direction.vertical state
-            let overlappingRemovedAndPlaysValidated = ret |> List.sortByDescending (fun (_, s,_) -> s.Length) |> List.map (fun (coord,acc,dir) ->
-                removeOverlappingLettersOnBoardAndValidate acc coord state dir) |> List.filter Option.isSome |> List.map Option.get
+            let overlappingRemovedAndPlaysValidated =
+                ret
+                |> List.filter (fun (coord,word,dir) ->
+                    banned
+                    |> List.contains (toCharListWithCoords word coord dir
+                                      |> List.filter (fun (coord,_) ->
+                                          not (Map.containsKey coord state.board)
+                                          )
+                                      )
+                    |> not
+                    )
+                |> List.sortByDescending (fun (_, s,_) -> s.Length)
+                |> List.map (fun (coord,acc,dir) -> removeOverlappingLettersOnBoardAndValidate acc coord state dir)
+                |> List.filter Option.isSome
+                |> List.map Option.get
             
             if List.isEmpty overlappingRemovedAndPlaysValidated then
                 ""
             else 
                 let ret = generateApiMoveFromCoordCharList (overlappingRemovedAndPlaysValidated |> List.head)
                 ret
-            
-            
-           
-    let findStartWordDir (x, y)  (board: Map<int*int,char*int>) direction =
-        let rec aux (x, y) dir (acc: char list) =
-            if Map.containsKey (x, y) board then
-                match dir with
-                | "horizontal" ->
-                    let c = fstTuple (Map.find (x, y) board)
-                    aux (x-1, y) dir (c :: acc)
-                | "vertical" ->
-                    let c = fstTuple (Map.find (x, y) board)
-                    aux (x, y-1) dir (c :: acc)
-            else
-                acc
-                    
-        aux (x,y) direction []
-        
-    let findEndWordDir (x, y)  (board: Map<int*int,char*int>) direction =
-        let rec aux (x, y) dir (acc: char list) =
-            if Map.containsKey (x, y) board then
-                match dir with
-                | "horizontal" ->
-                    let c = fstTuple (Map.find (x, y) board)
-                    aux (x+1, y) dir (c :: acc)
-                | "vertical" ->
-                    let c = fstTuple (Map.find (x, y) board)
-                    aux (x, y+1) dir (c :: acc)
-            else
-                acc
-                    
-        aux (x,y) direction [] |> List.rev
+                
      
     let rec makePermutations rack =
         let permutationCount = 2f ** (List.length rack |> float32) |> int
@@ -295,7 +327,7 @@ module Scrabble =
         let rec aux (x,y) offset =
             if Map.containsKey (x,y) st.board then
                 match direction with
-                | "horizontal" ->
+                | Direction.horizontal ->
                     let has_left = Map.containsKey (x , y - 1) st.board
                     let has_right = Map.containsKey (x , y + 1) st.board
                    
@@ -307,11 +339,11 @@ module Scrabble =
                                 printfn "Has left entered\n"
                                 let c,_ = Map.find (x, y) st.board
                                 // (findStartWordDir(x, y-1) st.board "vertical") @ (c :: findEndWordDir (x, y + 1) st.board "vertical")
-                                word @ (c :: findEndWordDir (x, y + 1) st.board "vertical")
+                                word @ (c :: (findEndWordDir (x, y + 1) st.board Direction.vertical |> sndTuple))
                             else if has_right then
                                 printfn "Has right entered\n"
                                 let c,_ = Map.find (x, y) st.board
-                                c :: findEndWordDir (x, y + 1) st.board "vertical"
+                                c :: (findEndWordDir (x, y + 1) st.board Direction.vertical |> sndTuple) 
                             else
                                 []
                         else
@@ -327,7 +359,7 @@ module Scrabble =
                         false
                     else
                         aux (x + 1, y) 0
-                | "vertical" ->
+                | Direction.vertical ->
                     let has_left = Map.containsKey (x - 1, y) st.board
                     let has_right = Map.containsKey (x + 1, y) st.board
                     
@@ -335,10 +367,10 @@ module Scrabble =
                         if has_left then
                             let c,_ = Map.find (x, y) st.board
                             //(findStartWordDir(x-1, y) st.board "horizontal") @ (c :: findEndWordDir (x + 1, y) st.board "horizontal")
-                            word @ (c :: findEndWordDir (x, y + 1) st.board "vertical")
+                            word @ (c :: (findEndWordDir (x, y + 1) st.board Direction.vertical |> sndTuple))
                         else if has_right then
                             let c,_ = Map.find (x, y) st.board
-                            c :: findEndWordDir (x + 1, y) st.board "horizontal"
+                            c :: (findEndWordDir (x + 1, y) st.board Direction.vertical |> sndTuple) 
                         else
                             []
                             
@@ -366,7 +398,7 @@ module Scrabble =
         
         (List.fold
             (fun acc permutationHand ->
-                let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st)
+                let currentWord = (findAllWordsFromWord ( (startWord |> sndTuple) @ permutationHand ) st)
                 if currentWord <> [] && (validate (x,y) direction currentWord[0] st)
                 then currentWord :: acc
                 else acc
@@ -375,23 +407,21 @@ module Scrabble =
             permutationsFromRack, startWord)
 
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
-        let rec aux (st : State.state) counter=
+        let rec aux (st : State.state) counter banned =
             Print.printHand pieces (State.hand st)
             debugPrint (sprintf "This is the hand keys: %A\n" (MultiSet.getKeys st.hand))
              
             let lettersHand = uintArrayToLetters (MultiSet.getKeys st.hand)
             
-            let startMove = getMoves lettersHand st (Map.isEmpty st.board) // No error handling here
+            let startMove = getMoves lettersHand st (Map.isEmpty st.board) banned // No error handling here
             
             if String.IsNullOrWhiteSpace startMove then
                 send cstream SMPass
             else
-                let horOrVer = if Map.isEmpty st.board then Direction.vertical else Direction.horizontal
                 printfn "startmove: %A\n" (startMove)
                 
                 forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the     last inputs)\n\n"
                 
-                printfn "%A" horOrVer
                 let move = RegEx.parseMove startMove 
                 
                 debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
@@ -469,21 +499,27 @@ module Scrabble =
                                |> MultiSet.ofList
                                |> MultiSet.subtract st.hand
                                |> MultiSet.union (MultiSet.ofListAmount newPieces)
-                aux {st with board = updated; hand = newHand } (counter+1)
+                aux {st with board = updated; hand = newHand } (counter+1) []
             | RCM (CMPlayed (pid, ms, points)) ->
                 (* Successful play by other player. Update your state *)
                 let updated = (st.board, toBoardStateWId ms) ||> List.fold (fun s row -> Map.add (snd row) (trd row) s)
-                aux {st with board = updated } (counter+1)
+                aux {st with board = updated } (counter+1) []
             | RCM (CMPlayFailed (pid, ms)) ->
                 (* Failed play. Update your state *)
                 let st' = st // This state needs to be updated
-                aux st' (counter+1)
+                if pid = st.playerNumber then
+                    let failedWord = toBoardStateWId ms |> List.map (fun (id, coord,(char, p)) ->
+                        let x,y = coord
+                        (x,y),char)
+                    aux st' (counter+1) (failedWord :: banned)
+                else
+                    aux st' (counter+1) banned
             | RCM (CMGameOver _) -> ()
             | RCM a -> failwith (sprintf "not implmented: %A" a)
-            | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st (counter+1)
+            | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st (counter+1) []
 
 
-        aux st 0
+        aux st 0 []
 
     let startGame 
             (boardP : boardProg) 

@@ -145,4 +145,4 @@ module internal Solver
             acc @ moves
             )
         
-        res
+        res |> List.distinct
