@@ -11,14 +11,18 @@ module internal State
         dict          : ScrabbleUtil.Dictionary.Dict
         playerNumber  : uint32
         hand          : MultiSet.MultiSet<uint32>
+        playerTurn    : uint32
+        amountPlayers : uint32
     }
 
-    let mkState b d pn h = {
+    let mkState b d pn h pt ap = {
         // board = b;
         board = b
         dict = d
         playerNumber = pn
         hand = h
+        playerTurn = pt
+        amountPlayers = ap 
     }
     
     let board st         = st.board

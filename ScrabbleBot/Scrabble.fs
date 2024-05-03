@@ -369,78 +369,52 @@ module Scrabble =
         
     
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
-        let rec aux (st : State.state) counter=
-            Print.printHand pieces (State.hand st)
-            debugPrint (sprintf "This is the hand keys: %A\n" (MultiSet.getKeys st.hand))
-             
-            let lettersHand = uintArrayToLetters (MultiSet.getKeys st.hand)
-            
-            let startMove, pos = getMoves lettersHand st (Map.isEmpty st.board) // No error handling here
-            
-            forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
-            
-            // let input =  System.Console.ReadLine()
-            // let move = RegEx.parseMove inpt
-            
-            let move =
-                if Map.count st.board = 0 then
-                    let horOrVer = if Map.isEmpty st.board then Direction.horizontal else Direction.vertical
-                    let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList startMove pos horOrVer)
-                    
-                    printf "REGEX GENERATED MOVE START: %A\n" regexMove
-                    regexMove
-                else
-                    printfn "This is your hand: %A\n" lettersHand
-                    
-                    // printfn "this is all the moves: %A\n" (generateAllMoves lettersHand st)
-                    // Console.ReadLine()
-                    
-                    let moves = generateAllMoves lettersHand st
-                    printfn "Moves: %A\n" moves
-                    
-                    let longestString,coord,direction = (longestStrings (moves :: []))[0]
-                    printfn "Generated move from all moves: %A\n" longestString
-                    
-                    // Console.ReadLine()
-                   
-                    let actualDirection =
-                        if direction = Direction.vertical then
-                            Direction.vertical
-                        else
-                            Direction.horizontal
-                           
-                    let moves, startWord = (validWordsAt coord direction lettersHand st)
-                    let knownSize = List.length startWord
-                   
-                    printfn "Moves: %A\n" moves
-                    let generatedMove = longestString[knownSize..]
-                    printfn "Generated move: %A\n" generatedMove
-                    printfn "Coords: %A" coord
-                    let x,y = coord
-                    let regexMove =
-                        match actualDirection with
-                        | Direction.horizontal ->
-                            let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList generatedMove (x + 1, y) actualDirection)
-                            
-                            regexMove
-                        | Direction.vertical ->
-                            let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList generatedMove (x, y + 1) actualDirection)
-                            
-                            regexMove
-                    
-                    printf "REGEX GENERATED MOVE: %A\n" regexMove
-                    
-                    regexMove
+        let rec aux (st : State.state) counter =
+            if st.playerTurn = st.playerNumber then 
+                Print.printHand pieces (State.hand st)
+                debugPrint (sprintf "This is the hand keys: %A\n" (MultiSet.getKeys st.hand))
+                 
+                let lettersHand = uintArrayToLetters (MultiSet.getKeys st.hand)
                 
-            
-            debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
-            send cstream (SMPlay move)
-            if counter > 200_000 then
-                while true do
-                    ()
+                // forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
+                
+                let move =
+                    if Map.isEmpty st.board then
+                        let startMove, pos =((findAllWordsFromRack lettersHand st)
+                                             |> List.sortByDescending List.length)[0], (0,0) // No error handling here
+                        let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList startMove pos Direction.vertical)
+                        // printf "REGEX GENERATED MOVE START: %A\n" regexMove
+                        regexMove
+                    else
+                        
+                        let moves = generateAllMoves lettersHand st
+                        
+                        let longestString,coord,direction = (longestStrings (moves :: []))[0]
+                               
+                        let moves, startWord = (validWordsAt coord direction lettersHand st)
+                        let knownSize = List.length startWord
+                       
+                        let generatedMove = longestString[knownSize..]
+                        printfn "Generated move: %A\n" generatedMove
+                        
+                        let other = otherDir direction
+                        let offset = computeOffset coord 1 other
+                       
+                        let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList generatedMove offset direction)
+                        printf "REGEX GENERATED MOVE: %A\n" regexMove
+                        
+                        regexMove
                     
+                
+                debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
+                send cstream (SMPlay move)
+                if counter > 200_000 then
+                    while true do
+                        ()
+                        
+            let updatedTurn = ((st.playerTurn)%st.amountPlayers)+1u
             let msg = recv cstream
-            debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
+            // debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
 
             match msg with
             | RCM (CMPlaySuccess(ms, points, newPieces)) ->
@@ -453,17 +427,20 @@ module Scrabble =
                                |> MultiSet.ofList
                                |> MultiSet.subtract st.hand
                                |> MultiSet.union (MultiSet.ofListAmount newPieces)
-                aux {st with board = updated; hand = newHand } (counter+1)
+                aux {st with board = updated; hand = newHand; playerTurn = updatedTurn } (counter+1)
             | RCM (CMPlayed (pid, ms, points)) ->
                 (* Successful play by other player. Update your state *)
                 let updated = (st.board, toBoardStateWId ms) ||> List.fold (fun s row -> Map.add (snd row) (trd row) s)
-                aux {st with board = updated } (counter+1)
+                aux {st with board = updated; playerTurn = updatedTurn } (counter+1)
             | RCM (CMPlayFailed (pid, ms)) ->
                 (* Failed play. Update your state *)
-                let st' = st // This state needs to be updated
-                aux st' (counter+1)
+                // let st' = st // This state needs to be updated
+                aux {st with playerTurn = updatedTurn } (counter+1)
             | RCM (CMGameOver _) -> ()
-            | RCM a -> failwith (sprintf "not implmented: %A" a)
+            // | RCM (CMChangeSuccess(pieces)) ->
+            | RCM a ->
+                aux {st with playerTurn = updatedTurn } (counter+1)
+                // failwith (sprintf "not implmented: %A" a)
             | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st (counter+1)
 
 
@@ -492,5 +469,5 @@ module Scrabble =
         // let res = Dictionary.step 'T' dict
         let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty hand
 
-        fun () -> playGame cstream tiles (State.mkState Map.empty dict playerNumber handSet)
+        fun () -> playGame cstream tiles (State.mkState Map.empty dict playerNumber handSet playerTurn numPlayers)
         
