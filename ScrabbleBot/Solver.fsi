@@ -6,6 +6,5 @@ module internal Solver
     
     type Rack = char list 
     
-    val fbm : Direction -> state -> ((int*int)*string) list 
-   
+    val fbm : Direction -> state -> ((int*int)*char list*Direction) list
     val find_anchors: (int*int) -> (Map<int*int, char*int>) -> (int*int) list

@@ -13,6 +13,7 @@ open System.Threading
 
 open ScrabbleUtil.DebugPrint
 open Solver
+open State
 
 // The RegEx module is only used to parse human input. It is not used for the final product.
 module RegEx =
@@ -203,23 +204,7 @@ module Scrabble =
                 aux xs (acc + (generateValidMoveForApiFromLetter x newCoord)) (offset + 1)
         aux move "" 0
         
-        
-    let getMoves letters state isStartMove =
-        if isStartMove then
-            ((findAllWordsFromRack letters state) |> List.sortByDescending List.length)[0], (0,0) // No error handling here
-        else
-            let ret = fbm Direction.horizontal state
-            debugPrint (sprintf "%A\n" (ret))
-            let pos, str = ret |> List.head
-            str |> Seq.toList, pos
-            // let pos = southPoint state
-            // let leftMoves = generateLeftSide state
-            // let rightMoves = generateRightSide state
-            // if List.isEmpty leftMoves then
-            //     rightMoves, pos
-            // else
-            //     leftMoves, pos
-           
+          
     let findStartWordDir (x, y)  (board: Map<int*int,char*int>) direction =
         let rec aux (x, y) dir (acc: char list) =
             if Map.containsKey (x, y) board then
@@ -231,7 +216,7 @@ module Scrabble =
                     let c = fstTuple (Map.find (x, y) board)
                     aux (x, y-1) dir (c :: acc)
             else
-                acc
+                (x,y),acc
                     
         aux (x,y) direction []
         
@@ -246,10 +231,77 @@ module Scrabble =
                     let c = fstTuple (Map.find (x, y) board)
                     aux (x, y+1) dir (c :: acc)
             else
-                acc
+                (x,y),acc
                     
-        aux (x,y) direction [] |> List.rev
-     
+        let coords, res = aux (x,y) direction []
+        coords, res |> List.rev
+    
+    
+    let computeOffset (x,y) offset dir =
+        if dir = Direction.horizontal then
+            (x,y+offset)
+        else
+            (x+offset,y)
+    let otherDir dir = if dir = Direction.horizontal then Direction.vertical else Direction.horizontal
+    let toCharListWithCoords word pos dir =
+        word |> List.mapi (fun i c -> computeOffset pos i dir,c)
+    let reBuildFromBoard charsWithPos state =
+        ("", charsWithPos) ||> List.fold (fun acc (coords, c) ->
+        let c = 
+            if Map.containsKey coords state.board then
+                Map.find coords state.board |> fstTuple
+            else
+                c
+        acc+(Char.ToString c))
+    let rec removeOverlappingLettersOnBoardAndValidate word pos (state: state) dir =
+        let charsWithPos = toCharListWithCoords word pos dir
+        let boardString = reBuildFromBoard charsWithPos state 
+        let crossDir = otherDir dir
+        let crossDirectionValid = (true, charsWithPos) ||> List.fold (fun acc (coords, c) ->
+                let strt,start = findStartWordDir coords state.board crossDir
+                let _,endWrd = findEndWordDir coords state.board crossDir
+                if start |> (@) endWrd |> List.length > 1 then
+                    let charsWithPos = toCharListWithCoords (start @ endWrd) strt crossDir
+                    let boardString = reBuildFromBoard charsWithPos state
+                    acc && Dictionary.lookup boardString state.dict
+                else
+                    acc && true) 
+        let crossDirectionValid = crossDirectionValid || true
+        if Dictionary.lookup boardString state.dict && crossDirectionValid then
+            Some(charsWithPos |> List.filter (fun (coord,_) -> not (Map.containsKey coord state.board)))
+        else
+            None
+            
+           
+    let generateApiMoveFromCoordCharList lst =
+        ("", lst) ||> List.fold (fun acc (coord, c) ->
+            acc+generateValidMoveForApiFromLetter c coord)
+    
+    let getMoves letters state banned =
+        let ret = fbm Direction.horizontal state @ fbm Direction.vertical state
+        let overlappingRemovedAndPlaysValidated =
+            ret
+            |> List.filter (fun (coord,word,dir) ->
+                banned
+                |> List.contains (toCharListWithCoords word coord dir
+                                  |> List.filter (fun (coord,_) ->
+                                      not (Map.containsKey coord state.board)
+                                      )
+                                  )
+                |> not
+                )
+            |> List.sortByDescending (fun (_, s,_) -> s.Length)
+            |> List.map (fun (coord,acc,dir) -> removeOverlappingLettersOnBoardAndValidate acc coord state dir)
+            |> List.filter Option.isSome
+            |> List.map Option.get
+        
+        if List.isEmpty overlappingRemovedAndPlaysValidated then
+            ""
+        else 
+            let ret = generateApiMoveFromCoordCharList (overlappingRemovedAndPlaysValidated |> List.head)
+            ret
+                 
+         
     let rec makePermutations rack =
         let permutationCount = 2f ** (List.length rack |> float32) |> int
         
@@ -264,12 +316,6 @@ module Scrabble =
         
         List.init permutationCount (makePermutation rack)
    
-    let computeOffset (x,y) offset dir =
-        if dir = Direction.horizontal then
-            (x,y+offset)
-        else
-            (x+offset,y)
-    let otherDir dir = if dir = Direction.horizontal then Direction.vertical else Direction.horizontal
     let validate pos direction (word: char list) (startWord: char list) (st : State.state) =
         let wordLength = List.length word - 1
         let startWordLength = List.length startWord - 1
@@ -305,11 +351,11 @@ module Scrabble =
         
         ([], permutationsFromRack)
         ||> (List.fold (fun acc permutationHand ->
-                let currentWord = (findAllWordsFromWord ( startWord @ permutationHand ) st) |> List.sortBy List.length
+                let currentWord = (findAllWordsFromWord ( (sndTuple startWord) @ permutationHand ) st) |> List.sortBy List.length
                 // printfn "current word is %A\n" currentWord
                 let isValid =
                     if (List.length currentWord)-1 >= 0 then
-                        validate pos direction currentWord[(List.length currentWord)-1] startWord st
+                        validate pos direction currentWord[(List.length currentWord)-1] (sndTuple startWord) st
                     else false
                 if currentWord <> [] && isValid
                 then (currentWord, pos, direction) :: acc
@@ -392,15 +438,21 @@ module Scrabble =
                         let longestString,coord,direction = (longestStrings (moves :: []))[0]
                                
                         let moves, startWord = (validWordsAt coord direction lettersHand st)
-                        let knownSize = List.length startWord
+                        let knownSize = List.length (sndTuple startWord)
                        
-                        let generatedMove = longestString[knownSize..]
-                        printfn "Generated move: %A\n" generatedMove
-                        
                         let other = otherDir direction
                         let offset = computeOffset coord 1 other
-                       
+                        let generatedMove =
+                            let m = longestString[knownSize..]
+                            // printfn "Generated move: %A\n" generatedMove
+                            // if List.isEmpty m then
+                            if false then
+                                // We need some more info here
+                                getMoves lettersHand st [] |> Seq.toList
+                            else
+                                m
                         let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList generatedMove offset direction)
+                       
                         printf "REGEX GENERATED MOVE: %A\n" regexMove
                         
                         regexMove
