@@ -230,7 +230,7 @@ module Scrabble =
         
         let hand =
             if overflowOfVowelsOrConsonants then
-                let filterfun = if overflowOfVowels then isConsonant else isVowel
+                let filterfun = if overflowOfVowels then isVowel else isConsonant
                 MultiSet.filter (fun cid _ ->
                     let c = uintToLetter cid
                     filterfun c) hand
