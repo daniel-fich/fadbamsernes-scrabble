@@ -9,6 +9,7 @@ module internal MultiSet
     val size : MultiSet<'a> -> uint32
     val add   : 'a -> uint32 -> MultiSet<'a> -> MultiSet<'a>
     val fold  : ('b -> 'a -> uint32 -> 'b) -> 'b -> MultiSet<'a> -> 'b
+    val filter  : ('a -> uint32 -> bool) -> MultiSet<'a> -> MultiSet<'a>
     val remove : 'a -> uint32 -> MultiSet<'a> -> MultiSet<'a>
     val removeSingle : 'a -> MultiSet<'a> -> MultiSet<'a>
     val subtract : MultiSet<'a> -> MultiSet<'a> -> MultiSet<'a>

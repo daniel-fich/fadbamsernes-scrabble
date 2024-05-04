@@ -49,6 +49,7 @@
 
 
     let fold (folder : 'b -> 'a -> uint32 -> 'b) (state : 'b) (R m) = Map.fold folder state m
+    let filter (filter : 'a -> uint32 -> bool) (R m) = R(Map.filter filter m)
     let foldBack (folder : 'a -> uint32 -> 'b -> 'b) (R m) (state : 'b) = Map.foldBack folder m state
     
     let ofList (list : 'a list) : MultiSet<'a> =

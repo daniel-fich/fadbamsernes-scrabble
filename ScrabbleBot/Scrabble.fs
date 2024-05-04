@@ -228,6 +228,15 @@ module Scrabble =
         let overflowOfVowels = amountOfVowelsOnHand > 5u
         let overflowOfVowelsOrConsonants = overflowOfVowels || overflowOfConsonants
         
+        let hand =
+            if overflowOfVowelsOrConsonants then
+                let filterfun = if overflowOfVowels then isConsonant else isVowel
+                MultiSet.filter (fun cid _ ->
+                    let c = uintToLetter cid
+                    filterfun c) hand
+            else
+                hand
+
         let tooManyOf =
             ([], hand) ||> MultiSet.fold (fun acc cid amount ->
                     if amount > 2u then (cid,amount-1u)::acc else acc)
@@ -243,21 +252,19 @@ module Scrabble =
                 |> List.rev
                 |> List.filter (fun cid ->
                     tooManyOfOnlyCid |> List.contains cid |> not)
-        if overflowOfVowelsOrConsonants then
-            let amountToExchange = tooManyOf |> List.sumBy sndTuple
-            if amountToExchange >= 4u then
-                (MultiSet.empty, tooManyOf) ||> List.fold (fun acc (cid, amount) -> MultiSet.add cid amount acc) |> MultiSet.toList
-            else
-                let amountRemaining = 4u - amountToExchange
-                let leastLikely = orderedByOccurrenceAsc[..int amountRemaining-1]
-                let least =
-                        leastLikely
-                        |> MultiSet.ofList
-                        |> MultiSet.toTupleList
-                        |> (@) tooManyOf
-                (MultiSet.empty, least) ||> List.fold (fun acc (cid, amount) -> MultiSet.add cid amount acc) |> MultiSet.toList
-        else
+        
+        let amountToExchange = tooManyOf |> List.sumBy sndTuple
+        if amountToExchange >= 4u then
             (MultiSet.empty, tooManyOf) ||> List.fold (fun acc (cid, amount) -> MultiSet.add cid amount acc) |> MultiSet.toList
+        else
+            let amountRemaining = 4u - amountToExchange
+            let leastLikely = orderedByOccurrenceAsc[..int amountRemaining-1]
+            let least =
+                    leastLikely
+                    |> MultiSet.ofList
+                    |> MultiSet.toTupleList
+                    |> (@) tooManyOf
+            (MultiSet.empty, least) ||> List.fold (fun acc (cid, amount) -> MultiSet.add cid amount acc) |> MultiSet.toList
                 
     let getPointsForLetter letter =
         match Map.tryFind letter letterPoints with
