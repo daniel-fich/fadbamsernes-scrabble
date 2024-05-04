@@ -43,20 +43,6 @@ module RegEx =
         MultiSet.fold (fun _ x i -> forcePrint (sprintf "%d -> (%A, %d)\n" x (Map.find x pieces) i)) ()
 
 
-module GenerateMove =
-    
-    let rec gen pos word rack arc (state: State.state) =
-        if Map.containsKey pos state.board then
-           0 
-        elif List.isEmpty rack then
-            List.filter (fun c -> allowed c arc) rack
-            |> List.iter (fun c -> goOn pos c word (List.filter (fun c' -> c' <> c)) (step c arc) arc)
-            0
-        else
-            0
-    and goOn pos l word rack newArc oldArc =
-        // if po
-        ()
 module Scrabble =
     open Solver
         
@@ -233,7 +219,7 @@ module Scrabble =
                 let filterfun = if overflowOfVowels then isVowel else isConsonant
                 MultiSet.filter (fun cid _ ->
                     let c = uintToLetter cid
-                    filterfun c) hand
+                    filterfun c && c <> ' ') hand
             else
                 hand
 

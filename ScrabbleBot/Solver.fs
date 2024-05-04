@@ -47,24 +47,24 @@ module internal Solver
     (*
         Implementation of scrabble move algorithm from paper https://ericsink.com/downloads/faster-scrabble-gordon.pdf
     *)
-    let rec gen1 anchor pos word state acc dir =
+    let rec gen anchor pos word state acc dir =
         let offset = computeOffset anchor pos dir
         if Map.containsKey offset state.board then
             let letter,_ = Map.find offset state.board
-            goon1 anchor pos letter word (step letter state.dict) state acc dir
+            goon anchor pos letter word (step letter state.dict) state acc dir
         else if not (isEmpty state.hand) then
             (acc, getKeys state.hand) ||> List.fold (fun acc' item ->
                 let letter = uintToLetter item
                 let nextDict = (step letter state.dict)
                 if nextDict |> Option.isSome then
                     let nextHand = removeSingle item state.hand
-                    goon1 anchor pos letter word (step letter state.dict) {state with hand = nextHand} acc' dir
+                    goon anchor pos letter word (step letter state.dict) {state with hand = nextHand} acc' dir
                 else
                     acc'
             )
         else
             acc
-    and goon1 anchor pos letter word newArc state acc dir =
+    and goon anchor pos letter word newArc state acc dir =
         let leftTaken = Map.containsKey (computeOffset anchor (pos-1) dir) state.board
         let rightTaken = Map.containsKey (computeOffset anchor (pos+1) dir) state.board
         let rightFromAnchor = Map.containsKey (computeOffset anchor (1) dir) state.board
@@ -79,13 +79,13 @@ module internal Solver
                 let newArc = Option.get newArc |> snd
                 let acc =
                     if not leftTaken then
-                        gen1 anchor (pos-1) word {state with dict = newArc} acc dir
+                        gen anchor (pos-1) word {state with dict = newArc} acc dir
                     else
                         acc
                 let newArc = reverse newArc
                 if Option.isSome newArc && not leftTaken && not rightTaken then
                     let newArc = Option.get newArc |> snd
-                    gen1 anchor 1 word {state with dict = newArc} acc dir
+                    gen anchor 1 word {state with dict = newArc} acc dir
                 else
                     acc
             else
@@ -99,7 +99,7 @@ module internal Solver
                     acc
             if Option.isSome newArc && not rightTaken then
                 let newArc = Option.get newArc |> snd
-                gen1 anchor (pos+1) word {state with dict = newArc} acc dir
+                gen anchor (pos+1) word {state with dict = newArc} acc dir
             else
                 acc
             
@@ -113,18 +113,8 @@ module internal Solver
                        elm :: acc
                )
                
-    // let find_connected ((x,y): int*int) (board: Map<int*int, char*int>) =
-    //        let viable = [x,y+1;x,y-1;x+1,y;x-1,y]
-    //        ([],viable) ||>
-    //            List.fold (fun acc elm ->
-    //                if Map.containsKey elm board then
-    //                    elm :: acc
-    //                else
-    //                    acc
-    //            )
-            
     let generate_moves (anchor: int*int) (dir: Direction) (state: state) =
-        let ret = gen1 anchor 0 [] state [] dir
+        let ret = gen anchor 0 [] state [] dir
         (((0,0),[]), ret) ||> List.fold (fun acc (coords, word) ->
             if lookup (String.Concat word) state.dict then
                 coords, word
