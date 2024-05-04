@@ -13,27 +13,27 @@ module Gaddag
     let ifNoneThenSome a = Option.defaultValue (empty()) a
         
     let rec rotateFold (str: 'a list) (acc: 'a list list) =
-        // let l = List.length str
-        // match str with
-        // | _ when str[l-1]='#' -> acc
-        // | _ ->
-        //     let x = str[idx]
-        //     let r = [y; x] @ xs
-        //     rotateFold r (r::acc)
-        // | _ -> failwith "Will not be hit"
-        
-        // ^ fucking horrible
-        // I got lazy don't hate
-        let arr = List.toArray str
-        let mutable acc1 = []
-        for i in 1..List.length str-1 do
-            for j in 0..i do
-                let tmpi = arr[i]
-                let tmpj = arr[j]
-                arr[j] <- tmpi
-                arr[i] <- tmpj
-            acc1 <- Array.toList arr :: acc1
-        acc1
+        let rec swapElements lst i j =
+            let tmp = lst
+            let ret = lst |> List.mapi (fun idx elm ->
+                if idx = i then tmp[j]
+                else if idx = j then tmp[i]
+                else elm)
+            ret
+                
+        let rec aux str i acc =
+            let rec inner j str =
+                if j = i then
+                    str
+                else
+                    let swapped = (swapElements str i j)
+                    inner (j+1) swapped
+            if i = (List.length str) - 1 then
+                acc
+            else
+                let swapped = (inner 0 str)
+                aux swapped (i+1) (swapped::acc)
+        aux str 1 []
         
     let rec rotateFold2 (str: 'a list) =
         let mutable acc1 = []
@@ -55,14 +55,15 @@ module Gaddag
                     }
                 ) (ifNoneThenSome curr)
       
-        let strs = rotateFold ('#'::(List.ofSeq str)) []
+        let str = List.ofSeq str
+        let strs = rotateFold ('#'::str) []
         
         let rec isrt a st =
             match a with
             | [] -> st
             | x :: xs -> isrt xs (inner x id st)
             
-        isrt strs state
+        isrt ((List.rev str)::strs) state
 
     let poundIfNot c cond =
         if not (cond c) then '#' else c
