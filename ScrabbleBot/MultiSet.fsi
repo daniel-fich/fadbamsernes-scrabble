@@ -6,6 +6,7 @@ module internal MultiSet
 
     val empty : MultiSet<'a>
     val isEmpty : MultiSet<'a> -> bool
+    val size : MultiSet<'a> -> uint32
     val add   : 'a -> uint32 -> MultiSet<'a> -> MultiSet<'a>
     val fold  : ('b -> 'a -> uint32 -> 'b) -> 'b -> MultiSet<'a> -> 'b
     val remove : 'a -> uint32 -> MultiSet<'a> -> MultiSet<'a>
@@ -15,4 +16,6 @@ module internal MultiSet
     val ofList : List<'a> -> MultiSet<'a>
     val ofListAmount : List<'a*uint32> -> MultiSet<'a>
     val getKeys : MultiSet<'a>  -> 'a list
+    val toTupleList : MultiSet<'a>  -> ('a*uint32) list
+    val toList : MultiSet<'a>  -> 'a list
     

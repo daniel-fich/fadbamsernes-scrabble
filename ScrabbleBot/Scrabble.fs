@@ -178,7 +178,87 @@ module Scrabble =
             'V', 4; 'W', 4; 'X', 8; 'Y', 4; 'Z', 10
         ]
         |> Map.ofList 
-      
+    let letterPercentages = 
+        [
+            ('E', 11.1607)
+            ('A', 8.4966)
+            ('R', 7.5809)
+            ('I', 7.5448)
+            ('O', 7.1635)
+            ('T', 6.9509)
+            ('N', 6.6544)
+            ('S', 5.7351)
+            ('L', 5.4893)
+            ('C', 4.5388)
+            ('U', 3.6308)
+            ('D', 3.3844)
+            ('P', 3.1671)
+            ('M', 3.0129)
+            ('H', 3.0034)
+            ('G', 2.4705)
+            ('B', 2.0720)
+            ('F', 1.8121)
+            ('Y', 1.7779)
+            ('W', 1.2899)
+            ('K', 1.1016)
+            ('V', 1.0074)
+            ('X', 0.2902)
+            ('Z', 0.2722)
+            ('J', 0.1965)
+            ('Q', 0.1962)
+        ] |> Map.ofList
+        
+    let isVowel (c: char) =
+        "aeiouAEIOU" |> String.exists ((=) c)
+    
+    let isConsonant (c: char) =
+        not (isVowel c)
+ 
+    let amountOfVowels hand =
+        (0u, hand) ||> MultiSet.fold (fun acc cid amount ->
+            let c = uintToLetter cid
+            if isVowel c then acc+amount else acc)
+    let amountOfConsonants hand =
+        MultiSet.size hand - (amountOfVowels hand)
+    
+    let computeLettersToExchange hand =
+        let amountOfVowelsOnHand = amountOfVowels hand
+        let amountOfConsonantsOnHand = amountOfConsonants hand
+        let overflowOfConsonants = amountOfConsonantsOnHand > 5u
+        let overflowOfVowels = amountOfVowelsOnHand > 5u
+        let overflowOfVowelsOrConsonants = overflowOfVowels || overflowOfConsonants
+        
+        let tooManyOf =
+            ([], hand) ||> MultiSet.fold (fun acc cid amount ->
+                    if amount > 2u then (cid,amount-1u)::acc else acc)
+        
+        let tooManyOfOnlyCid =
+            tooManyOf |> List.map fstTuple
+        let orderedByOccurrenceAsc =
+            let cids = MultiSet.getKeys hand
+            cids |> List.sortByDescending (fun cid ->
+                let c = uintToLetter cid |> Char.ToUpper
+                if c = ' ' then 100.
+                else Map.find c letterPercentages)
+                |> List.rev
+                |> List.filter (fun cid ->
+                    tooManyOfOnlyCid |> List.contains cid |> not)
+        if overflowOfVowelsOrConsonants then
+            let amountToExchange = tooManyOf |> List.sumBy sndTuple
+            if amountToExchange >= 4u then
+                (MultiSet.empty, tooManyOf) ||> List.fold (fun acc (cid, amount) -> MultiSet.add cid amount acc) |> MultiSet.toList
+            else
+                let amountRemaining = 4u - amountToExchange
+                let leastLikely = orderedByOccurrenceAsc[..int amountRemaining-1]
+                let least =
+                        leastLikely
+                        |> MultiSet.ofList
+                        |> MultiSet.toTupleList
+                        |> (@) tooManyOf
+                (MultiSet.empty, least) ||> List.fold (fun acc (cid, amount) -> MultiSet.add cid amount acc) |> MultiSet.toList
+        else
+            (MultiSet.empty, tooManyOf) ||> List.fold (fun acc (cid, amount) -> MultiSet.add cid amount acc) |> MultiSet.toList
+                
     let getPointsForLetter letter =
         match Map.tryFind letter letterPoints with
         | Some points -> points
@@ -244,7 +324,7 @@ module Scrabble =
             (x+offset,y)
     let otherDir dir = if dir = Direction.horizontal then Direction.vertical else Direction.horizontal
     let toCharListWithCoords word pos dir =
-        word |> List.mapi (fun i c -> computeOffset pos i dir,c)
+        word |> List.mapi (fun i c -> computeOffset pos i (otherDir dir),c)
     let reBuildFromBoard charsWithPos state =
         ("", charsWithPos) ||> List.fold (fun acc (coords, c) ->
         let c = 
@@ -277,7 +357,7 @@ module Scrabble =
         ("", lst) ||> List.fold (fun acc (coord, c) ->
             acc+generateValidMoveForApiFromLetter c coord)
     
-    let getMoves letters state banned =
+    let getMoves state banned =
         let ret = fbm Direction.horizontal state @ fbm Direction.vertical state
         let overlappingRemovedAndPlaysValidated =
             ret
@@ -416,6 +496,7 @@ module Scrabble =
     
     let playGame cstream (pieces: Map<uint32, tile>) (st : State.state) =
         let rec aux (st : State.state) counter =
+            let lettersToExchange = computeLettersToExchange st.hand
             if st.playerTurn = st.playerNumber then 
                 Print.printHand pieces (State.hand st)
                 debugPrint (sprintf "This is the hand keys: %A\n" (MultiSet.getKeys st.hand))
@@ -442,27 +523,25 @@ module Scrabble =
                        
                         let other = otherDir direction
                         let offset = computeOffset coord 1 other
-                        let generatedMove =
-                            let m = longestString[knownSize..]
-                            // printfn "Generated move: %A\n" generatedMove
-                            // if List.isEmpty m then
-                            if false then
-                                // We need some more info here
-                                getMoves lettersHand st [] |> Seq.toList
+                        let m = longestString[knownSize..]
+                        let regexMove =
+                            if List.isEmpty m then
+                                let move = getMoves st []
+                                RegEx.parseMove move
                             else
-                                m
-                        let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList generatedMove offset direction)
-                       
-                        printf "REGEX GENERATED MOVE: %A\n" regexMove
+                                RegEx.parseMove (generateValidMoveForApiFromCharList m offset direction)
+                        // debugPrint (sprintf "REGEX GENERATED MOVE: %A\n" regexMove)
                         
                         regexMove
                     
-                
-                debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
-                send cstream (SMPlay move)
-                if counter > 200_000 then
-                    while true do
-                        ()
+                if List.isEmpty move then
+                    if List.isEmpty lettersToExchange then
+                        send cstream SMPass
+                    else
+                        send cstream (SMChange lettersToExchange)
+                else
+                    debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
+                    send cstream (SMPlay move)
                         
             let updatedTurn = ((st.playerTurn)%st.amountPlayers)+1u
             let msg = recv cstream
@@ -489,7 +568,13 @@ module Scrabble =
                 // let st' = st // This state needs to be updated
                 aux {st with playerTurn = updatedTurn } (counter+1)
             | RCM (CMGameOver _) -> ()
-            // | RCM (CMChangeSuccess(pieces)) ->
+            | RCM (CMChangeSuccess(pieces)) ->
+                let newHand =
+                    lettersToExchange
+                    |> MultiSet.ofList
+                    |> MultiSet.subtract st.hand
+                    |> MultiSet.union (MultiSet.ofListAmount pieces)
+                aux {st with playerTurn = updatedTurn; hand = newHand } (counter+1)
             | RCM a ->
                 aux {st with playerTurn = updatedTurn } (counter+1)
                 // failwith (sprintf "not implmented: %A" a)

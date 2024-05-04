@@ -61,6 +61,9 @@
         let createList count x = List.init (int count) (fun _ -> x)
         let folder = fun list x count -> (createList count x) @ list
         fold folder [] ms |> List.rev
+        
+    let toTupleList (ms : MultiSet<'a>) : ('a*uint32) list =
+        fold (fun acc a count -> (a,count)::acc) [] ms
    
     let map (f : 'a -> 'b) (msa : MultiSet<'a>) : MultiSet<'b> =
         fold (fun msb x count -> add (f x) count msb) empty msa
