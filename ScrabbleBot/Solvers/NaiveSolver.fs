@@ -79,50 +79,28 @@ module internal NaiveSolver
             | [] ->
                 acc
             | x :: xs ->
-                let newCoord =
-                    match direction with
-                    | Direction.horizontal -> (fst coordinate + offset, snd coordinate)
-                    | Direction.vertical -> (fst coordinate, snd coordinate + offset)
-                    | _ -> failwith "Not going to be hit"
-                aux xs (acc + (generateValidMoveForApiFromLetter x newCoord)) (offset + 1)
+                let coordOffset = computeOffset coordinate offset direction
+                aux xs (acc + (generateValidMoveForApiFromLetter x coordOffset)) (offset + 1)
         aux move "" 0
         
           
-    let findStartWordDir (x, y)  (board: Map<int*int,char*int>) direction =
-        let rec aux (x, y) dir (acc: char list) =
-            if Map.containsKey (x, y) board then
-                match dir with
-                | Direction.horizontal ->
-                    let c = fst (Map.find (x, y) board)
-                    aux (x-1, y) dir (c :: acc)
-                | Direction.vertical ->
-                    let c = fst (Map.find (x, y) board)
-                    aux (x, y-1) dir (c :: acc)
+    let findWordWithOffset pos offset board dir =
+        let rec aux pos dir (acc: char list) =
+            if Map.containsKey pos board then
+                let offset = computeOffset pos offset dir
+                let c = Map.find pos board |> fst
+                aux offset dir (c :: acc)
             else
-                (x,y),acc
-                    
-        aux (x,y) direction []
+                pos,acc
+        aux pos dir []
+    
+    let findStartWordDir pos (board: Map<int*int,char*int>) direction =
+        findWordWithOffset pos -1 board direction 
         
-    let findEndWordDir (x, y)  (board: Map<int*int,char*int>) direction =
-        let rec aux (x, y) dir (acc: char list) =
-            if Map.containsKey (x, y) board then
-                match dir with
-                | Direction.horizontal ->
-                    let c = fst (Map.find (x, y) board)
-                    aux (x+1, y) dir (c :: acc)
-                | Direction.vertical ->
-                    let c = fst (Map.find (x, y) board)
-                    aux (x, y+1) dir (c :: acc)
-            else
-                (x,y),acc
-                    
-        let coords, res = aux (x,y) direction []
+    let findEndWordDir pos (board: Map<int*int,char*int>) direction =
+        let coords, res = findWordWithOffset pos 1 board direction
         coords, res |> List.rev
     
-    
-   
-                 
-         
     let rec makePermutations rack =
         let permutationCount = 2f ** (List.length rack |> float32) |> int
         
@@ -142,21 +120,23 @@ module internal NaiveSolver
         let startWordLength = List.length startWord - 1
         
         let rec aux (x,y) acc bool =
-            // printfn "aux with %A\n" bool
+            let pos = x,y
             let other = otherDir direction
-            let leftCoord = computeOffset (x,y) -1 other
-            let rightCoord = computeOffset (x,y) 1 other
-            let leftOp = Map.containsKey leftCoord st.board
-            let rightOp = Map.containsKey rightCoord st.board
-            let afterOp = Map.containsKey(x,y+1) st.board
-        
-            let newCoord = computeOffset (x,y) 1 direction
+            let leftCoord = computeOffset pos -1 other
+            let rightCoord = computeOffset pos 1 other
+            let afterOpCoord = computeOffset pos 1 direction
+             
+            let posOp c = Map.containsKey c st.board |> not
             
-            let noLettersAround = not leftOp && not rightOp && not afterOp
+            let leftOp = posOp leftCoord
+            let rightOp = posOp rightCoord
+            let afterOp = posOp afterOpCoord 
+        
+            let noLettersAround = leftOp && rightOp && afterOp
             match acc with
             | _ when not bool -> false
             | acc when acc = wordLength -> true
-            | _ -> aux newCoord (acc+1) noLettersAround
+            | _ -> aux afterOpCoord (acc+1) noLettersAround
         
         if Map.containsKey pos st.board && wordLength > startWordLength then
             let newCoord = computeOffset pos 1 direction
@@ -169,12 +149,9 @@ module internal NaiveSolver
         let startWord = findStartWordDir pos st.board direction
         let permutationsFromRack = makePermutations lettersHand
         
-        // printfn "Using startword %A\n" startWord
-        
         ([], permutationsFromRack)
         ||> (List.fold (fun acc permutationHand ->
                 let currentWord = (findAllWordsFromWord ( (snd startWord) @ permutationHand ) st) |> List.sortBy List.length
-                // printfn "current word is %A\n" currentWord
                 let isValid =
                     if (List.length currentWord)-1 >= 0 then
                         validate pos direction currentWord[(List.length currentWord)-1] (snd startWord) st
@@ -204,33 +181,17 @@ module internal NaiveSolver
     
         tuple |> List.map longestStringInInnerList 
     
-    let generateAllMoves lettersHand (st : Types.state) =
-        let mv = st.board |> Map.fold (fun keys key _ -> key :: keys) []
-        
-        let rec auxVert moves acc = 
+    let generateAllMoves lettersHand (st : state) =
+        let allCoords = st.board |> Map.keys |> List.ofSeq
+        let rec aux moves acc dir = 
             match moves with
             | [] -> acc
             | x :: xs -> 
-                let x' = fst x
-                let y' = snd x
-                
-                if Map.containsKey(x', y'+1) st.board || Map.containsKey(x'+1, y') st.board then
-                    auxVert xs acc
+                let offset = computeOffset x 1 dir
+                if Map.containsKey offset st.board then
+                    aux xs acc dir
                 else
-                    let validWords = fst (validWordsAt x Direction.vertical lettersHand st)
-                    auxVert xs (validWords @ acc)
-            
-        let rec auxHori moves acc = 
-            match moves with
-            | [] -> acc
-            | x :: xs ->
-                let x' = fst x
-                let y' = snd x
+                    let validWords = fst (validWordsAt x dir lettersHand st)
+                    aux xs (validWords @ acc) dir
                 
-                if Map.containsKey(x', y'+1) st.board or Map.containsKey(x'+1, y') st.board then
-                    auxHori xs acc
-                else
-                    let validWords = fst (validWordsAt x Direction.horizontal lettersHand st)
-                    auxHori xs (validWords @ acc)
-                
-        (auxHori mv []) @ (auxVert mv [])
+        (aux allCoords [] Direction.horizontal) @ (aux allCoords [] Direction.vertical)

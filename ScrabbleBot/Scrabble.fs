@@ -1,16 +1,8 @@
 ﻿namespace YourClientName
 
-open System
-open System.Net.Security
-open System.Reflection
-open Parser
 open ScrabbleUtil
 open ScrabbleUtil.ServerCommunication
-open Gaddag
 open System.IO
-open System.Linq
-open System.Threading
-
 open ScrabbleUtil.DebugPrint
 open Solver
 open Types
@@ -134,10 +126,7 @@ module Scrabble =
                 aux {st with playerTurn = updatedTurn } (counter+1) 0
             | RCM (CMGameOver _) -> ()
             | RCM (CMPassed(pid)) ->
-                if pid = st.playerNumber then
-                    aux {st with playerTurn = updatedTurn } (counter+1) passincrement
-                else
-                    aux {st with playerTurn = updatedTurn } (counter+1) passincrement
+                aux {st with playerTurn = updatedTurn } (counter+1) passincrement
             | RCM (CMChangeSuccess(pieces)) ->
                 let newHand =
                     lettersToExchange
