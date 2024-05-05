@@ -3,6 +3,7 @@ module internal NaiveSolver
     open ScrabbleUtil
     open Types
     open BasicUtils
+    open SolvingUtil
 
     let rec findSuitable (hand: char list) (acc: char list) (dict : Dictionary.Dict) =
         match hand with
@@ -53,8 +54,14 @@ module internal NaiveSolver
                             ret
                     
                     let reversed = Dictionary.reverse newState
-                    let _, newState = ((false, newState), reversed) ||> Option.defaultValue 
-                    aux remaining newState (acc + 1) wordList  
+                    // let _, reversed = ((false, newState), reversed) ||> Option.defaultValue
+                    if Option.isSome reversed then
+                        let _,reversed = Option.get reversed
+                        aux remaining reversed (acc + 1) wordList
+                        @
+                        aux remaining newState (acc + 1) wordList
+                    else
+                        aux remaining newState (acc + 1) wordList
                     
         aux oWord st.dict 0 []
 
@@ -77,25 +84,7 @@ module internal NaiveSolver
                 let coordOffset = computeOffset coordinate offset direction
                 aux xs (acc + (generateValidMoveForApiFromLetter x coordOffset)) (offset + 1)
         aux move "" 0
-        
-          
-    let findWordWithOffset pos offset board dir =
-        let rec aux pos dir (acc: char list) =
-            if Map.containsKey pos board then
-                let offset = computeOffset pos offset dir
-                let c = Map.find pos board |> fst
-                aux offset dir (c :: acc)
-            else
-                pos,acc
-        aux pos dir []
-    
-    let findStartWordDir pos (board: Map<int*int,char*int>) direction =
-        findWordWithOffset pos -1 board direction 
-        
-    let findEndWordDir pos (board: Map<int*int,char*int>) direction =
-        let coords, res = findWordWithOffset pos 1 board direction
-        coords, res |> List.rev
-    
+      
     let rec makePermutations rack =
         let permutationCount = 2f ** (List.length rack |> float32) |> int
         
@@ -110,16 +99,16 @@ module internal NaiveSolver
         
         List.init permutationCount (makePermutation rack)
    
-    let validate pos direction (word: char list) (startWord: char list) (st : Types.state) =
+    let validate pos direction (word: char list) (startWord: char list) (st : Types.state) offset =
         let wordLength = List.length word - 1
         let startWordLength = List.length startWord - 1
         
         let rec aux pos acc bool =
             let other = otherDir direction
 
-            let leftCoord = computeOffset pos -1 other
-            let rightCoord = computeOffset pos 1 other
-            let afterOpCoord = computeOffset pos 1 direction
+            let leftCoord = computeOffset pos (-1*offset) other
+            let rightCoord = computeOffset pos offset other
+            let afterOpCoord = computeOffset pos offset direction
              
             let posOp c = Map.containsKey c st.board |> not
             
@@ -134,45 +123,55 @@ module internal NaiveSolver
             | _ -> aux afterOpCoord (acc+1) noLettersAround
         
         if Map.containsKey pos st.board && wordLength > startWordLength then
-            let newCoord = computeOffset pos 1 direction
+            let newCoord = computeOffset pos offset direction
             aux newCoord 0 true
         else
             false
              
         
-    let validWordsAt pos direction lettersHand (st : Types.state) =
+    let validWordsAt pos direction lettersHand (st : Types.state) offset =
+        let findStartWordDir = if offset > 0 then findStartWordDir else findEndWordDir
         let startWord = findStartWordDir pos st.board direction
         let permutationsFromRack = makePermutations lettersHand
         
         ([], permutationsFromRack)
         ||> (List.fold (fun acc permutationHand ->
-                let currentWord = (findAllWordsFromWord ( (snd startWord) @ permutationHand ) st) |> List.sortBy List.length
+                let pos', startWord = startWord
+                let currentWord =
+                    if offset > 0 then
+                        (findAllWordsFromWord (startWord @ permutationHand) st) |> List.sortBy List.length
+                    else
+                        (findAllWordsFromWord (permutationHand @ startWord) st) |> List.sortBy List.length
                 let isValid =
                     if (List.length currentWord)-1 >= 0 then
-                        validate pos direction currentWord[(List.length currentWord)-1] (snd startWord) st
+                        validate pos direction currentWord[(List.length currentWord)-1] startWord st offset
                     else false
+                // let currentWord = if offset > 0 then currentWord else List.map List.rev currentWord
+                // let pos = if offset > 0 then pos else computeOffset pos (List.length currentWord |> (-) 1 |> (*) -1) direction
                 if currentWord <> [] && isValid
-                then (currentWord, pos, direction) :: acc
+                then (currentWord, computeOffset pos' 1 direction, direction, offset) :: acc
                 else acc
             )), startWord
 
 
-    let longestStrings (tuple: (char list list * (int*int)*Direction) list list) =
-        let longestStringInList (lst: char list list * (int*int) * Direction) =
-            let lst, c, dir = lst
+    let longestStrings (tuple: (char list list * (int*int)*Direction*int) list list) =
+        let longestStringInList (lst: char list list * (int*int) * Direction * int) =
+            let lst, c, dir, offset = lst
             let ret = 
                 match lst with
                 | [] -> []
                 | xs -> xs |> List.maxBy _.Length
-            ret, c, dir
+            ret, c, dir, offset
     
-        let longestStringInInnerList (innerList: (char list list * (int*int) * Direction) list)=
+        let longestStringInInnerList (innerList: (char list list * (int*int) * Direction *int) list)=
             match innerList with
-            | [] -> [], (0,0), Direction.horizontal
+            | [] -> [], (0,0), Direction.horizontal, 0
             | xs ->
                 xs
                 |> List.map longestStringInList
-                |> List.maxBy (fun (cLst, _, _) -> cLst.Length)
+                |> List.maxBy (fun (lst,_,_,_) ->
+                    lst.Length
+                )
     
         tuple |> List.map longestStringInInnerList 
     
@@ -182,13 +181,63 @@ module internal NaiveSolver
             match moves with
             | [] -> acc
             | x :: xs -> 
-                let offset = computeOffset x 1 dir
-                if Map.containsKey offset st.board then
-                    aux xs acc dir
-                else
-                    let validWords = fst (validWordsAt x dir lettersHand st)
+                let positiveOffset = computeOffset x 1 dir
+                let negativeOffset = computeOffset x -1 dir
+                let contains v = Map.containsKey v st.board
+                let notContainsPositive = contains positiveOffset |> not
+                let notContainsNegative = contains negativeOffset |> not
+                if notContainsPositive || notContainsNegative then
+                    let validWords =
+                        if notContainsNegative then
+                            fst (validWordsAt x dir lettersHand st -1)
+                        else []
+                        
+                    let validWords =
+                        if notContainsPositive then fst (validWordsAt x dir lettersHand st 1) @ validWords
+                        else validWords
+                    
                     aux xs (validWords @ acc) dir
+                else
+                    aux xs acc dir
                 
         (aux allCoords [] Direction.horizontal)
         @
         (aux allCoords [] Direction.vertical)
+    
+    let computeLongestWord letters state =
+        let moves = generateAllMoves letters state
+                                    
+        let overlappingRemovedAndPlaysValidated =
+             (longestStrings (moves :: []))
+             |> List.map (fun (word, coord, dir, offset) ->
+                    // let _, startWord = (validWordsAt coord dir letters state offset)
+                    // let knownSize = List.length (snd startWord)
+                    let coord =
+                        if offset < 0 then
+                            // let offsetOffset = if dir = Direction.horizontal then -2 else -1
+                            let posOffset = (List.length word |> (*) -2 |> (+) 2)
+                            let tmp = computeOffset coord posOffset dir
+                            tmp
+                        else coord
+                    if offset < 0 then 
+                        coord, word[1..]@[word[1]], dir
+                    else coord, word, dir
+                )
+             |> List.sortByDescending (fun (_, s,_) -> s.Length)
+             |> List.map (fun (coord,acc,dir) -> removeOverlappingLettersOnBoardAndValidate acc coord state dir)
+             |> List.filter Option.isSome
+             |> List.map Option.get
+                 
+               
+        
+        // let _, startWord = (validWordsAt coord direction letters state offset)
+        // let knownSize = List.length (snd startWord)
+       
+        // let offset = computeOffset coord offset direction
+        // let m = longestString[knownSize..]
+        
+        if List.isEmpty overlappingRemovedAndPlaysValidated then
+            ""
+        else 
+            let ret = generateApiMoveFromCoordCharList (overlappingRemovedAndPlaysValidated |> List.head)
+            ret

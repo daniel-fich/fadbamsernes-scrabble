@@ -6,6 +6,7 @@ module internal Solver
     open ScrabbleUtil.Dictionary
     open Types
     open BasicUtils
+    open SolvingUtil
     open NaiveSolver
 
     let lOnOldArc letter state =
@@ -105,41 +106,7 @@ module internal Solver
         
         res |> List.distinct
     
-    let toCharListWithCoords word pos dir =
-        word |> List.mapi (fun i c -> computeOffset pos i dir,c)
-    let reBuildFromBoard charsWithPos state =
-        ("", charsWithPos) ||> List.fold (fun acc (coords, c) ->
-        let c = 
-            if Map.containsKey coords state.board then
-                Map.find coords state.board |> fst
-            else
-                c
-        acc+(Char.ToString c))
-    
-    let rec removeOverlappingLettersOnBoardAndValidate word pos (state: state) dir =
-        let charsWithPos = toCharListWithCoords word pos dir
-        let boardString = reBuildFromBoard charsWithPos state 
-        let crossDir = otherDir dir
-        let crossDirectionValid = (true, charsWithPos) ||> List.fold (fun acc (coords, c) ->
-                let strt,start = findStartWordDir coords state.board crossDir
-                let _,endWrd = findEndWordDir coords state.board crossDir
-                let endWrd = endWrd[1..]
-                if endWrd |> (@) start |> List.length > 1 then
-                    // let charsWithPos = toCharListWithCoords (start @ endWrd) strt crossDir
-                    // let boardString = reBuildFromBoard charsWithPos state
-                    acc && lookup (String.Concat (start@endWrd)) state.dict
-                else
-                    acc) 
-        let crossDirectionValid = crossDirectionValid 
-        if lookup boardString state.dict && crossDirectionValid then
-            Some(charsWithPos |> List.filter (fun (coord,_) -> not (Map.containsKey coord state.board)))
-        else
-            None
-            
-           
-    let generateApiMoveFromCoordCharList lst =
-        ("", lst) ||> List.fold (fun acc (coord, c) ->
-            acc+generateValidMoveForApiFromLetter c coord)
+   
     
     let getMoves state banned =
         let ret = fbm Direction.horizontal state @ fbm Direction.vertical state
