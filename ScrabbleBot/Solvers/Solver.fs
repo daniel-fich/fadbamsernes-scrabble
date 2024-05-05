@@ -4,42 +4,10 @@ module internal Solver
     open MultiSet
     open ScrabbleUtil
     open ScrabbleUtil.Dictionary
-    open State
+    open Types
+    open BasicUtils
+    open NaiveSolver
 
-    type Direction =
-        | horizontal = 0
-        | vertical = 1
-    
-    type Rack = char list   
-    
-    
-    let uintToLetter (n: uint32) =
-        let baseAscii = int 'A'
-        let offset = int n - 1
-        if offset >= 0 && offset < 26 then
-            char (baseAscii + offset)
-        else
-            ' '
-    let asciiLetterToAlphabetPos (letter: char): uint32 =
-        let uppercaseLetter = Char.ToUpper letter
-        let asciiA = uint32 'A'
-        let asciiLetter = uint32 uppercaseLetter
-        if asciiLetter >= asciiA && asciiLetter <= asciiA + 25u then
-            asciiLetter - asciiA + 1u
-        else
-            failwith "Input is not an uppercase letter"
-
-    let conditionalAppend item acc stmt =
-        if stmt then
-            item::acc
-        else acc
-    let computeOffset (x, y) pos direction =
-        if direction = Direction.horizontal then
-            (x+pos,y)
-        else
-            (x, y+pos)
-    let unionMap (map1: Map<int*int,char>) (map2:Map<int*int,char>) =
-        (map2, map1) ||> Map.fold (fun acc key value -> Map.add key value acc)
     let lOnOldArc letter state =
         Option.isSome (step letter state.dict)
     let recordPlay anchor pos dir word acc =
@@ -136,3 +104,63 @@ module internal Solver
             )
         
         res |> List.distinct
+    
+    let toCharListWithCoords word pos dir =
+        word |> List.mapi (fun i c -> computeOffset pos i dir,c)
+    let reBuildFromBoard charsWithPos state =
+        ("", charsWithPos) ||> List.fold (fun acc (coords, c) ->
+        let c = 
+            if Map.containsKey coords state.board then
+                Map.find coords state.board |> fst
+            else
+                c
+        acc+(Char.ToString c))
+    
+    let rec removeOverlappingLettersOnBoardAndValidate word pos (state: state) dir =
+        let charsWithPos = toCharListWithCoords word pos dir
+        let boardString = reBuildFromBoard charsWithPos state 
+        let crossDir = otherDir dir
+        let crossDirectionValid = (true, charsWithPos) ||> List.fold (fun acc (coords, c) ->
+                let strt,start = findStartWordDir coords state.board crossDir
+                let _,endWrd = findEndWordDir coords state.board crossDir
+                let endWrd = endWrd[1..]
+                if endWrd |> (@) start |> List.length > 1 then
+                    // let charsWithPos = toCharListWithCoords (start @ endWrd) strt crossDir
+                    // let boardString = reBuildFromBoard charsWithPos state
+                    acc && lookup (String.Concat (start@endWrd)) state.dict
+                else
+                    acc) 
+        let crossDirectionValid = crossDirectionValid 
+        if lookup boardString state.dict && crossDirectionValid then
+            Some(charsWithPos |> List.filter (fun (coord,_) -> not (Map.containsKey coord state.board)))
+        else
+            None
+            
+           
+    let generateApiMoveFromCoordCharList lst =
+        ("", lst) ||> List.fold (fun acc (coord, c) ->
+            acc+generateValidMoveForApiFromLetter c coord)
+    
+    let getMoves state banned =
+        let ret = fbm Direction.horizontal state @ fbm Direction.vertical state
+        let overlappingRemovedAndPlaysValidated =
+            ret
+            |> List.filter (fun (coord,word,dir) ->
+                banned
+                |> List.contains (toCharListWithCoords word coord dir
+                                  |> List.filter (fun (coord,_) ->
+                                      not (Map.containsKey coord state.board)
+                                      )
+                                  )
+                |> not
+                )
+            |> List.sortByDescending (fun (_, s,_) -> s.Length)
+            |> List.map (fun (coord,acc,dir) -> removeOverlappingLettersOnBoardAndValidate acc coord state dir)
+            |> List.filter Option.isSome
+            |> List.map Option.get
+        
+        if List.isEmpty overlappingRemovedAndPlaysValidated then
+            ""
+        else 
+            let ret = generateApiMoveFromCoordCharList (overlappingRemovedAndPlaysValidated |> List.head)
+            ret

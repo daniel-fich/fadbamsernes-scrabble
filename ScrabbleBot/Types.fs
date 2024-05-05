@@ -1,4 +1,4 @@
-module internal State
+module internal Types
 
     // Make sure to keep your state localised in this module. It makes your life a whole lot easier.
     // Currently, it only keeps track of your hand, your player numer, your board, and your dictionary,
@@ -13,16 +13,18 @@ module internal State
         hand          : MultiSet.MultiSet<uint32>
         playerTurn    : uint32
         amountPlayers : uint32
+        playerList    : uint32 list
     }
 
-    let mkState b d pn h pt ap = {
+    let mkState b d pn h pt ap pl = {
         // board = b;
         board = b
         dict = d
         playerNumber = pn
         hand = h
         playerTurn = pt
-        amountPlayers = ap 
+        amountPlayers = ap
+        playerList = pl 
     }
     
     let board st         = st.board
@@ -30,4 +32,10 @@ module internal State
     let playerNumber st  = st.playerNumber
     let hand st          = st.hand
 
+    type Direction =
+        | horizontal = 0
+        | vertical = 1
+    
+    type Rack = char list   
+    
 

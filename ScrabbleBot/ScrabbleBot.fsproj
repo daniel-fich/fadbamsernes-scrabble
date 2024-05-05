@@ -16,9 +16,13 @@
     <Compile Include="Eval.fs" />
     <Compile Include="Parser.fsi" />
     <Compile Include="Parser.fs" />
-    <Compile Include="State.fs" />
-    <Compile Include="Solver.fsi" />
-    <Compile Include="Solver.fs" />
+    <Compile Include="Types.fs" />
+    <Compile Include="Misc\BasicUtils.fs" />
+    <Compile Include="Misc\TileExchange.fsi" />
+    <Compile Include="Misc\TileExchange.fs" />
+    <Compile Include="Solvers\NaiveSolver.fs" />
+    <Compile Include="Solvers\Solver.fsi" />
+    <Compile Include="Solvers\Solver.fs" />
     <Compile Include="Scrabble.fsi" />
     <Compile Include="Scrabble.fs" />
   </ItemGroup>
