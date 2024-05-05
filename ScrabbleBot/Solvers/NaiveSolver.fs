@@ -4,11 +4,6 @@ module internal NaiveSolver
     open Types
     open BasicUtils
 
- 
-    let toBoardStateWId ms = ms |> List.map (fun (coord, (tid, (c, v))) ->
-                        tid, coord, (c, v)
-                    )
-        
     let rec findSuitable (hand: char list) (acc: char list) (dict : Dictionary.Dict) =
         match hand with
         | [] -> None
@@ -119,9 +114,9 @@ module internal NaiveSolver
         let wordLength = List.length word - 1
         let startWordLength = List.length startWord - 1
         
-        let rec aux (x,y) acc bool =
-            let pos = x,y
+        let rec aux pos acc bool =
             let other = otherDir direction
+
             let leftCoord = computeOffset pos -1 other
             let rightCoord = computeOffset pos 1 other
             let afterOpCoord = computeOffset pos 1 direction
@@ -194,4 +189,6 @@ module internal NaiveSolver
                     let validWords = fst (validWordsAt x dir lettersHand st)
                     aux xs (validWords @ acc) dir
                 
-        (aux allCoords [] Direction.horizontal) @ (aux allCoords [] Direction.vertical)
+        (aux allCoords [] Direction.horizontal)
+        @
+        (aux allCoords [] Direction.vertical)

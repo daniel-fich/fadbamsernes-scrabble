@@ -53,4 +53,7 @@ module internal BasicUtils
             (x,y+offset)
     let otherDir dir = if dir = Direction.horizontal then Direction.vertical else Direction.horizontal
         
-
+    let toBoardStateWId ms =
+        ms |> List.map (fun (coord, (tid, (c, v))) ->
+            tid, coord, (c, v)
+        )
