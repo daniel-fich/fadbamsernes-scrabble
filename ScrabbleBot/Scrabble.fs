@@ -1,5 +1,6 @@
 ﻿namespace YourClientName
 
+open System
 open ScrabbleUtil
 open ScrabbleUtil.ServerCommunication
 open System.IO
@@ -61,22 +62,13 @@ module Scrabble =
                             // printf "REGEX GENERATED MOVE START: %A\n" regexMove
                             regexMove
                         else
-                            
-                            let moves = generateAllMoves lettersHand st
-                            
-                            let longestString,coord,direction = (longestStrings (moves :: []))[0]
-                                   
-                            let _, startWord = (validWordsAt coord direction lettersHand st)
-                            let knownSize = List.length (snd startWord)
-                           
-                            let offset = computeOffset coord 1 direction
-                            let m = longestString[knownSize..]
+                            let move = computeLongestWord lettersHand st
                             let regexMove =
-                                if List.isEmpty m then
+                                if String.IsNullOrWhiteSpace move then
                                     let move = getMoves st []
                                     RegEx.parseMove move
                                 else
-                                    RegEx.parseMove (generateValidMoveForApiFromCharList m offset direction)
+                                    RegEx.parseMove move
                             // debugPrint (sprintf "REGEX GENERATED MOVE: %A\n" regexMove)
                             
                             regexMove

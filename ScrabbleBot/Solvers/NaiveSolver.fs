@@ -3,6 +3,7 @@ module internal NaiveSolver
     open ScrabbleUtil
     open Types
     open BasicUtils
+    open SolverTools
 
     let rec findSuitable (hand: char list) (acc: char list) (dict : Dictionary.Dict) =
         match hand with
@@ -78,24 +79,7 @@ module internal NaiveSolver
                 aux xs (acc + (generateValidMoveForApiFromLetter x coordOffset)) (offset + 1)
         aux move "" 0
         
-          
-    let findWordWithOffset pos offset board dir =
-        let rec aux pos dir (acc: char list) =
-            if Map.containsKey pos board then
-                let offset = computeOffset pos offset dir
-                let c = Map.find pos board |> fst
-                aux offset dir (c :: acc)
-            else
-                pos,acc
-        aux pos dir []
-    
-    let findStartWordDir pos (board: Map<int*int,char*int>) direction =
-        findWordWithOffset pos -1 board direction 
-        
-    let findEndWordDir pos (board: Map<int*int,char*int>) direction =
-        let coords, res = findWordWithOffset pos 1 board direction
-        coords, res |> List.rev
-    
+   
     let rec makePermutations rack =
         let permutationCount = 2f ** (List.length rack |> float32) |> int
         
@@ -192,3 +176,41 @@ module internal NaiveSolver
         (aux allCoords [] Direction.horizontal)
         @
         (aux allCoords [] Direction.vertical)
+    
+    let computeLongestWord letters state =
+        let moves = generateAllMoves letters state
+                                    
+        // let overlappingRemovedAndPlaysValidated =
+        //      (longestStrings (moves :: []))
+        //      |> List.map (fun (word, coord, dir) ->
+        //         coord, word, dir
+        //         )
+        //      |> List.sortByDescending (fun (_, s,_) -> List.length s)
+        //      |> List.map (fun (coord,acc,dir) -> removeOverlappingLettersOnBoardAndValidate acc coord state dir)
+        //      |> List.filter Option.isSome
+        //      |> List.map Option.get
+        //          
+               
+        let moves = generateAllMoves letters state
+
+        let longestString,coord,direction = (longestStrings (moves :: []))[0]
+
+        let _, startWord = (validWordsAt coord direction letters state)
+
+        let knownSize = List.length (snd startWord)
+
+        let offset = computeOffset coord 1 direction
+
+        let m = longestString[knownSize..] 
+        // let _, startWord = (validWordsAt coord direction letters state offset)
+        // let knownSize = List.length (snd startWord)
+       
+        // let offset = computeOffset coord offset direction
+        // let m = longestString[knownSize..]
+        
+        // if List.isEmpty overlappingRemovedAndPlaysValidated then
+        //     ""
+        // else 
+        //     let ret = generateApiMoveFromCoordCharList (overlappingRemovedAndPlaysValidated |> List.head)
+        //     ret
+        (generateValidMoveForApiFromCharList m offset direction) 

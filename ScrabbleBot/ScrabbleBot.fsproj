@@ -20,6 +20,7 @@
     <Compile Include="Misc\BasicUtils.fs" />
     <Compile Include="Misc\TileExchange.fsi" />
     <Compile Include="Misc\TileExchange.fs" />
+    <Compile Include="Solvers\SolverTools.fs" />
     <Compile Include="Solvers\NaiveSolver.fs" />
     <Compile Include="Solvers\Solver.fsi" />
     <Compile Include="Solvers\Solver.fs" />
