@@ -40,8 +40,19 @@ module Scrabble =
     open TileExchange
     open NaiveSolver
     
+    let updateStateToError st error =
+        match error with
+        | GPENotEnoughPieces (changedTilesCount, availableTilesCount) ->
+            printfn $"changedTilesCount: {changedTilesCount}, availableTilesCount: {availableTilesCount}"
+            {st with maxLettersToExchange = Some availableTilesCount}
+        | _ ->
+            printfn $"Unhandled error: {error}"
+            st
+    
     let playGame cstream (pieces: Map<uint32, tile>) (st : state) =
         let rec aux (st : state) counter passctr =
+            
+            printfn $"------passes: {passctr}------"
             
             let lettersToExchange = computeLettersToExchange st.hand
             let hasPassed =
@@ -73,7 +84,7 @@ module Scrabble =
                             regexMove
                         
                     if List.isEmpty move then
-                        if List.isEmpty lettersToExchange then
+                        if List.isEmpty lettersToExchange || Option.isSome st.maxLettersToExchange then
                             send cstream SMPass
                             true
                         else
@@ -131,7 +142,11 @@ module Scrabble =
             | RCM a ->
                 aux {st with playerTurn = updatedTurn } (counter+1) 0
                 // failwith (sprintf "not implmented: %A" a)
-            | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st (counter+1) 0
+            | RGPE errors ->
+                //printfn "Gameplay Error:\n%A" errors
+                //List.iter (handleError st) errors
+                let newSt = List.fold updateStateToError st errors
+                aux newSt (counter+1) 0
 
 
         aux st 0 0

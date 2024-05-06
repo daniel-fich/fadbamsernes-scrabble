@@ -1,12 +1,13 @@
 module internal Types
     type state = {
-        board         : Map<int*int, char*int>
-        dict          : ScrabbleUtil.Dictionary.Dict
-        playerNumber  : uint32
-        hand          : MultiSet.MultiSet<uint32>
-        playerTurn    : uint32
-        amountPlayers : uint32
-        playerList    : uint32 list
+        board                : Map<int*int, char*int>
+        dict                 : ScrabbleUtil.Dictionary.Dict
+        playerNumber         : uint32
+        hand                 : MultiSet.MultiSet<uint32>
+        playerTurn           : uint32
+        amountPlayers        : uint32
+        playerList           : uint32 list
+        maxLettersToExchange : uint32 option
     }
 
     let mkState b d pn h pt ap pl = {
@@ -16,7 +17,8 @@ module internal Types
         hand = h
         playerTurn = pt
         amountPlayers = ap
-        playerList = pl 
+        playerList = pl
+        maxLettersToExchange = None
     }
     
     let board st         = st.board
