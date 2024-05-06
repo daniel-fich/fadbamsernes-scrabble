@@ -176,8 +176,6 @@ module internal NaiveSolver
     
     let computeLongestWord letters state =
         let moves = generateAllMoves letters state
-                                    
-        let moves = generateAllMoves letters state
 
         let longestString,coord,direction = (longestStrings (moves :: []))[0]
 

@@ -39,8 +39,8 @@ module internal SolverTools
         let boardString = reBuildFromBoard charsWithPos state 
         let crossDir = otherDir dir
         let crossDirectionValid = (true, charsWithPos) ||> List.fold (fun acc (coords, c) ->
-                let strt,start = findStartWordDir coords state.board crossDir
-                let _,endWrd = findEndWordDir coords state.board crossDir
+                let _, start = findStartWordDir coords state.board crossDir
+                let _, endWrd = findEndWordDir coords state.board crossDir
                 let endWrd = endWrd[1..]
                 if endWrd |> (@) start |> List.length > 1 then
                     acc && lookup (String.Concat (start@endWrd)) state.dict
@@ -56,5 +56,3 @@ module internal SolverTools
     let generateApiMoveFromCoordCharList lst =
         ("", lst) ||> List.fold (fun acc (coord, c) ->
             acc+generateValidMoveForApiFromLetter c coord)
-        
-

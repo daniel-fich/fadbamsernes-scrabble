@@ -29,7 +29,3 @@ module internal Types
     type Direction =
         | horizontal = 0
         | vertical = 1
-    
-    type Rack = char list   
-    
-
