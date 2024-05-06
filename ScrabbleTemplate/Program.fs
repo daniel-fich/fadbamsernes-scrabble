@@ -1,6 +1,4 @@
-﻿// Learn more about F# at http://fsharp.org
-
-open YourClientName
+﻿open BarelyFunctional
 
 let time f =
     let start = System.DateTime.Now
@@ -26,16 +24,7 @@ let main argv =
     System.Console.ForegroundColor <- System.ConsoleColor.Black
     System.Console.Clear()
 
-    // let board        = ScrabbleUtil.StandardBoard.standardBoard ()
     let board      = ScrabbleUtil.InfiniteBoard.infiniteBoard ()
-
-//    let board      = ScrabbleUtil.RandomBoard.randomBoard ()
-//    let board      = ScrabbleUtil.RandomBoard.randomBoardSeed (Some 42)
-//    let board      = ScrabbleUtil.InfiniteRandomBoard.infiniteRandomBoard ()
-//    let board      = ScrabbleUtil.InfiniteRandomBoard.infiniteRandomBoardSeed (Some 42)
-
-//    let board      = ScrabbleUtil.HoleBoard.holeBoard ()
-//    let board      = ScrabbleUtil.InfiniteHoleBoard.infiniteHoleBoard ()
 
     let words     = readLines "../../../Dictionaries/English.txt"
 
@@ -46,23 +35,17 @@ let main argv =
     let port       = 13001
 
     let dictAPI =
-        // Uncomment if you have implemented a dictionary. last element None if you have not implemented a GADDAG
-        // None
         Some (Gaddag.empty, Gaddag.insert, Gaddag.step, Some Gaddag.reverse) 
         
-    // Uncomment this line to call your client
     let (dictionary, time) =
         time (fun () -> ScrabbleUtil.Dictionary.mkDict words dictAPI) 
 
     // let players    = [("OxyphenButashit", dictionary,Scrabble.startGame); ("OxyphenButazone",dictionary,Oxyphenbutazone.Scrabble.startGame)]
-    // let players = spawnMultiples "OxyphenButazone" dictionary Oxyphenbutazone.Scrabble.startGame 2
-    let players = spawnMultiples "OxyphenButashit" dictionary Scrabble.startGame 2
+    let players = spawnMultiples "BarelyFunctional" dictionary Scrabble.startGame 2
 
 
     do ScrabbleServer.Comm.startGame 
           board dictionary handSize timeout tiles seed port players
-    
-    // Scrabble.startGame board dictionary handSize timeout tiles seed port players 
     
     ScrabbleUtil.DebugPrint.forcePrint ("Server has terminated. Press Enter to exit program.\n")
     System.Console.ReadLine () |> ignore

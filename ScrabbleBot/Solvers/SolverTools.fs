@@ -43,8 +43,6 @@ module internal SolverTools
                 let _,endWrd = findEndWordDir coords state.board crossDir
                 let endWrd = endWrd[1..]
                 if endWrd |> (@) start |> List.length > 1 then
-                    // let charsWithPos = toCharListWithCoords (start @ endWrd) strt crossDir
-                    // let boardString = reBuildFromBoard charsWithPos state
                     acc && lookup (String.Concat (start@endWrd)) state.dict
                 else
                     acc) 

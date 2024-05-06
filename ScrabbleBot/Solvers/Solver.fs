@@ -2,7 +2,6 @@ module internal Solver
 
     open System
     open MultiSet
-    open ScrabbleUtil
     open ScrabbleUtil.Dictionary
     open Types
     open BasicUtils

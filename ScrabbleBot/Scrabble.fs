@@ -1,4 +1,4 @@
-﻿namespace YourClientName
+﻿namespace BarelyFunctional
 
 open System
 open ScrabbleUtil
@@ -28,7 +28,6 @@ module RegEx =
                     ((x |> int, y |> int), (id |> uint32, (c |> char, p |> int)))
                 | _ -> failwith "Failed (should never happen)") |>
         Seq.toList
-// 0 0 20t1 0 1 9i1 0 2 5e1
  module Print =
 
     let printHand pieces hand =
