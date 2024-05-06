@@ -48,7 +48,7 @@ module Scrabble =
             st
     
     let playGame cstream (pieces: Map<uint32, tile>) (st : state) =
-        let rec aux (st : state) counter =
+        let rec aux (st : state) =
             
             let lettersToExchange = computeLettersToExchange st.hand
             if st.playerTurn = st.playerNumber then 
@@ -60,7 +60,7 @@ module Scrabble =
                 let move =
                     if Map.isEmpty st.board then
                         let startMove, pos =((findAllWordsFromRack lettersHand st)
-                                             |> List.sortByDescending List.length)[0], (0,0) // No error handling here
+                                             |> List.sortByDescending List.length)[0], (0,0)
                         let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList startMove pos Direction.vertical)
                         regexMove
                     else
@@ -71,7 +71,6 @@ module Scrabble =
                                 RegEx.parseMove move
                             else
                                 RegEx.parseMove move
-                        // debugPrint (sprintf "REGEX GENERATED MOVE: %A\n" regexMove)
                         
                         regexMove
                     
@@ -84,15 +83,12 @@ module Scrabble =
                     debugPrint (sprintf "Player %d -> Server:\n%A\n" (Types.playerNumber st) move) // keep the debug lines. They are useful.
                     send cstream (SMPlay move)
             let updatedTurn = ((st.playerTurn)%(uint32 (List.length st.playerList)))+1u
-            // let updatedTurn = List.item (int updatedTurn) st.playerList
             let msg = recv cstream
-            // debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
             let fst (a, _, _) = a
             let snd (_, b, _) = b
             let trd (_, _, c) = c
             match msg with
             | RCM (CMPlaySuccess(ms, points, newPieces)) ->
-                (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
                 let res = toBoardStateWId ms
                 let updated = (st.board, res)
                               ||> List.fold (fun s row -> Map.add (snd row) (trd row) s)
@@ -101,37 +97,33 @@ module Scrabble =
                                |> MultiSet.ofList
                                |> MultiSet.subtract st.hand
                                |> MultiSet.union (MultiSet.ofListAmount newPieces)
-                aux {st with board = updated; hand = newHand; playerTurn = updatedTurn } (counter+1)
+                aux {st with board = updated; hand = newHand; playerTurn = updatedTurn }
             | RCM (CMPlayed (pid, ms, points)) ->
-                (* Successful play by other player. Update your state *)
                 let updated = (st.board, toBoardStateWId ms) ||> List.fold (fun s row -> Map.add (snd row) (trd row) s)
-                aux {st with board = updated; playerTurn = updatedTurn } (counter+1)
+                aux {st with board = updated; playerTurn = updatedTurn }
             | RCM (CMPlayFailed (pid, ms)) ->
-                (* Failed play. Update your state *)
-                // let st' = st // This state needs to be updated
-                aux {st with playerTurn = updatedTurn } (counter+1)
+                aux {st with playerTurn = updatedTurn }
             | RCM (CMGameOver _) -> ()
             | RCM (CMPassed(pid)) ->
-                aux {st with playerTurn = updatedTurn } (counter+1)
+                aux {st with playerTurn = updatedTurn }
             | RCM (CMChangeSuccess(pieces)) ->
                 let newHand =
                     lettersToExchange
                     |> MultiSet.ofList
                     |> MultiSet.subtract st.hand
                     |> MultiSet.union (MultiSet.ofListAmount pieces)
-                aux {st with playerTurn = updatedTurn; hand = newHand } (counter+1)
+                aux {st with playerTurn = updatedTurn; hand = newHand }
             | RCM (CMTimeout(pid)) ->
                 let newlst = ([],st.playerList) ||> List.fold (fun acc item -> if item <> pid then item::acc else acc)
-                aux {st with playerTurn = updatedTurn; playerList = newlst } (counter+1)
-            | RCM a ->
-                aux {st with playerTurn = updatedTurn } (counter+1)
-                // failwith (sprintf "not implmented: %A" a)
+                aux {st with playerTurn = updatedTurn; playerList = newlst }
+            | RCM _ ->
+                aux {st with playerTurn = updatedTurn }
             | RGPE errors ->
                 let newSt = List.fold updateStateToError st errors
-                aux newSt (counter+1)
+                aux newSt
 
 
-        aux st 0
+        aux st
 
     let startGame 
             (boardP : boardProg) 
