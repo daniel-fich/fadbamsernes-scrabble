@@ -52,7 +52,6 @@ module Scrabble =
             
             let lettersToExchange = computeLettersToExchange st.hand
             if st.playerTurn = st.playerNumber then 
-                Print.printHand pieces (hand st)
                 debugPrint (sprintf "This is the hand keys: %A\n" (MultiSet.getKeys st.hand))
                  
                 let lettersHand = uintArrayToLetters (MultiSet.getKeys st.hand)
