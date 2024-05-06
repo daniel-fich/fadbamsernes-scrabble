@@ -18,24 +18,22 @@ module internal NaiveSolver
                     findSuitable xs (x::acc) dict'
             else
                 None
-                
-  
-    (*
-        Note the below code has been copied from
-        StackOverflow https://stackoverflow.com/questions/1526046/f-permutations
-    *)     
-    let rec splitList = function
-        | [x] -> [x,[]]
-        | x::xs -> (x, xs) :: List.map (fun (y,l) -> y,x::l) (splitList xs)
+ 
+    let permutations =
+        let rec inner acc curr elms =
+            match elms with
+            | [] -> curr::acc
+            | x ->
+                x
+                |> List.mapi (
+                    fun i elm ->
+                        let next = curr @ [elm]
+                        let remaining = List.removeAt i elms
+                        inner acc next remaining)
+                |> List.reduce (@)
+        inner [] []
 
-    let rec permutations = function
-        | [] -> [[]]
-        | l -> 
-            splitList l 
-            |> List.collect (fun (x,rest) ->
-                 (* permute remaining elements, then prepend head *)
-                 permutations rest |> List.map (fun l -> x::l))
-    
+
     let findAllWordsFromWord (oWord: char list) (st: state) : (char list list) =
         let rec aux word state acc ret =
             match word with
@@ -65,8 +63,8 @@ module internal NaiveSolver
             match hand with
             | [] -> acc
             | x :: xs -> aux xs (acc @ findAllWordsFromWord x st)
-   
-        aux (permutations hand) []
+        let perm = permutations hand
+        aux (perm) []
        
     
     let generateValidMoveForApiFromCharList (move: char list) (coordinate: int*int) (direction: Direction) =
@@ -180,17 +178,6 @@ module internal NaiveSolver
     let computeLongestWord letters state =
         let moves = generateAllMoves letters state
                                     
-        // let overlappingRemovedAndPlaysValidated =
-        //      (longestStrings (moves :: []))
-        //      |> List.map (fun (word, coord, dir) ->
-        //         coord, word, dir
-        //         )
-        //      |> List.sortByDescending (fun (_, s,_) -> List.length s)
-        //      |> List.map (fun (coord,acc,dir) -> removeOverlappingLettersOnBoardAndValidate acc coord state dir)
-        //      |> List.filter Option.isSome
-        //      |> List.map Option.get
-        //          
-               
         let moves = generateAllMoves letters state
 
         let longestString,coord,direction = (longestStrings (moves :: []))[0]
@@ -202,15 +189,5 @@ module internal NaiveSolver
         let offset = computeOffset coord 1 direction
 
         let m = longestString[knownSize..] 
-        // let _, startWord = (validWordsAt coord direction letters state offset)
-        // let knownSize = List.length (snd startWord)
-       
-        // let offset = computeOffset coord offset direction
-        // let m = longestString[knownSize..]
-        
-        // if List.isEmpty overlappingRemovedAndPlaysValidated then
-        //     ""
-        // else 
-        //     let ret = generateApiMoveFromCoordCharList (overlappingRemovedAndPlaysValidated |> List.head)
-        //     ret
+
         (generateValidMoveForApiFromCharList m offset direction) 
