@@ -46,7 +46,6 @@ module internal SolverTools
                     acc && lookup (String.Concat (start@endWrd)) state.dict
                 else
                     acc) 
-        let crossDirectionValid = crossDirectionValid 
         if lookup boardString state.dict && crossDirectionValid then
             Some(charsWithPos |> List.filter (fun (coord,_) -> not (Map.containsKey coord state.board)))
         else
