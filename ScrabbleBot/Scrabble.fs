@@ -48,50 +48,41 @@ module Scrabble =
             st
     
     let playGame cstream (pieces: Map<uint32, tile>) (st : state) =
-        let rec aux (st : state) counter passctr =
+        let rec aux (st : state) counter =
             
             let lettersToExchange = computeLettersToExchange st.hand
-            let hasPassed =
-                if st.playerTurn = st.playerNumber && passctr < 4 then 
-                    Print.printHand pieces (hand st)
-                    debugPrint (sprintf "This is the hand keys: %A\n" (MultiSet.getKeys st.hand))
-                     
-                    let lettersHand = uintArrayToLetters (MultiSet.getKeys st.hand)
-                    
-                    let move =
-                        if Map.isEmpty st.board then
-                            let startMove, pos =((findAllWordsFromRack lettersHand st)
-                                                 |> List.sortByDescending List.length)[0], (0,0) // No error handling here
-                            let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList startMove pos Direction.vertical)
-                            regexMove
-                        else
-                            let move = computeLongestWord lettersHand st
-                            let regexMove =
-                                if String.IsNullOrWhiteSpace move then
-                                    let move = getMoves st []
-                                    RegEx.parseMove move
-                                else
-                                    RegEx.parseMove move
-                            // debugPrint (sprintf "REGEX GENERATED MOVE: %A\n" regexMove)
-                            
-                            regexMove
-                        
-                    if List.isEmpty move then
-                        if List.isEmpty lettersToExchange || Option.isSome st.maxLettersToExchange then
-                            send cstream SMPass
-                            true
-                        else
-                            send cstream (SMChange lettersToExchange)
-                            false
+            if st.playerTurn = st.playerNumber then 
+                Print.printHand pieces (hand st)
+                debugPrint (sprintf "This is the hand keys: %A\n" (MultiSet.getKeys st.hand))
+                 
+                let lettersHand = uintArrayToLetters (MultiSet.getKeys st.hand)
+                
+                let move =
+                    if Map.isEmpty st.board then
+                        let startMove, pos =((findAllWordsFromRack lettersHand st)
+                                             |> List.sortByDescending List.length)[0], (0,0) // No error handling here
+                        let regexMove = RegEx.parseMove (generateValidMoveForApiFromCharList startMove pos Direction.vertical)
+                        regexMove
                     else
-                        debugPrint (sprintf "Player %d -> Server:\n%A\n" (Types.playerNumber st) move) // keep the debug lines. They are useful.
-                        send cstream (SMPlay move)
-                        false
-                else if passctr > 3 then
-                    send cstream SMForfeit
-                    false
-                else false
-            let passincrement = if hasPassed then passctr + 1 else passctr
+                        let move = computeLongestWord lettersHand st
+                        let regexMove =
+                            if String.IsNullOrWhiteSpace move then
+                                let move = getMoves st []
+                                RegEx.parseMove move
+                            else
+                                RegEx.parseMove move
+                        // debugPrint (sprintf "REGEX GENERATED MOVE: %A\n" regexMove)
+                        
+                        regexMove
+                    
+                if List.isEmpty move then
+                    if List.isEmpty lettersToExchange || Option.isSome st.maxLettersToExchange then
+                        send cstream SMPass
+                    else
+                        send cstream (SMChange lettersToExchange)
+                else
+                    debugPrint (sprintf "Player %d -> Server:\n%A\n" (Types.playerNumber st) move) // keep the debug lines. They are useful.
+                    send cstream (SMPlay move)
             let updatedTurn = ((st.playerTurn)%(uint32 (List.length st.playerList)))+1u
             // let updatedTurn = List.item (int updatedTurn) st.playerList
             let msg = recv cstream
@@ -110,37 +101,37 @@ module Scrabble =
                                |> MultiSet.ofList
                                |> MultiSet.subtract st.hand
                                |> MultiSet.union (MultiSet.ofListAmount newPieces)
-                aux {st with board = updated; hand = newHand; playerTurn = updatedTurn } (counter+1) 0
+                aux {st with board = updated; hand = newHand; playerTurn = updatedTurn } (counter+1)
             | RCM (CMPlayed (pid, ms, points)) ->
                 (* Successful play by other player. Update your state *)
                 let updated = (st.board, toBoardStateWId ms) ||> List.fold (fun s row -> Map.add (snd row) (trd row) s)
-                aux {st with board = updated; playerTurn = updatedTurn } (counter+1) 0
+                aux {st with board = updated; playerTurn = updatedTurn } (counter+1)
             | RCM (CMPlayFailed (pid, ms)) ->
                 (* Failed play. Update your state *)
                 // let st' = st // This state needs to be updated
-                aux {st with playerTurn = updatedTurn } (counter+1) 0
+                aux {st with playerTurn = updatedTurn } (counter+1)
             | RCM (CMGameOver _) -> ()
             | RCM (CMPassed(pid)) ->
-                aux {st with playerTurn = updatedTurn } (counter+1) passincrement
+                aux {st with playerTurn = updatedTurn } (counter+1)
             | RCM (CMChangeSuccess(pieces)) ->
                 let newHand =
                     lettersToExchange
                     |> MultiSet.ofList
                     |> MultiSet.subtract st.hand
                     |> MultiSet.union (MultiSet.ofListAmount pieces)
-                aux {st with playerTurn = updatedTurn; hand = newHand } (counter+1) 0
+                aux {st with playerTurn = updatedTurn; hand = newHand } (counter+1)
             | RCM (CMTimeout(pid)) ->
                 let newlst = ([],st.playerList) ||> List.fold (fun acc item -> if item <> pid then item::acc else acc)
-                aux {st with playerTurn = updatedTurn; playerList = newlst } (counter+1) 0
+                aux {st with playerTurn = updatedTurn; playerList = newlst } (counter+1)
             | RCM a ->
-                aux {st with playerTurn = updatedTurn } (counter+1) 0
+                aux {st with playerTurn = updatedTurn } (counter+1)
                 // failwith (sprintf "not implmented: %A" a)
             | RGPE errors ->
                 let newSt = List.fold updateStateToError st errors
-                aux newSt (counter+1) 0
+                aux newSt (counter+1)
 
 
-        aux st 0 0
+        aux st 0
 
     let startGame 
             (boardP : boardProg) 
