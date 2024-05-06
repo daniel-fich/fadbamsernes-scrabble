@@ -63,8 +63,7 @@ module internal NaiveSolver
             match hand with
             | [] -> acc
             | x :: xs -> aux xs (acc @ findAllWordsFromWord x st)
-        let perm = permutations hand
-        aux (perm) []
+        aux (permutations hand) []
        
     
     let generateValidMoveForApiFromCharList (move: char list) (coordinate: int*int) (direction: Direction) =
